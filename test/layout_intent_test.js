@@ -10,7 +10,7 @@ for(const t of [104,112,120,128,136,144])win(0,hold(2,t).concat(hold(6,20),hold(
 assert.equal(play(1,hold(2,40).concat(hold(6,20),hold(2,240))).cause,'collapse');
 for(const t of [32,40,48,56])for(const total of [112,120,128])win(1,hold(2,t).concat(hold(6,20),hold(2,total-t-20),hold(6,20),hold(2,240)));
 // Actual moving/expanding terrain, not fixed-cell substitutes.
-for(const t of [60,68,76,84,92,100])win(2,hold(2,t).concat(hold(6,20),hold(2,240)));
+for(const t of [44,48,52,56,60,64])for(const x of [4.1,4.3,4.5,4.7]){const r=require('./dynamic_pit_routes').baitRoute(M.parseRows(L[2].rows),t,x);assert(r.w.won);win(2,r.inputs);}
 for(const t of [16,20,24,28,32,36,40])win(3,hold(2,t).concat(hold(6,20),hold(2,240)));
 // Keep the approved fifth-level surprise; remove the precision spike added in v11.
 assert(!L[4].rows.join('').includes('^'),'no extra visible spike');

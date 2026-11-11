@@ -99,7 +99,7 @@
     if (!pits) { pits = []; for (var pi = 0; pi < map.length; pi++) if (map[pi] === TL.SHIFT || map[pi] === TL.CHASE) { pits = new M.World(map).pits; break; } }
     for (var pk = 0; pk < pits.length; pk++) { var pit = pits[pk];
       if (pit.right > pit.left) { g.save(); g.beginPath(); g.rect(pit.left * sc, pit.row * s, (pit.right - pit.left) * sc, (ROWS - pit.row) * s); g.clip(); ART3.bg(g, COLS * s, ROWS * s, t); g.restore(); }
-      if (view === 'edit') { g.fillStyle = '#ff7026'; g.font = 'bold ' + Math.round(s * 0.45) + 'px sans-serif'; g.fillText(pit.kind === TL.SHIFT ? '←' : '→→', (pit.cell % COLS) * s, (pit.row + 0.7) * s); }
+      if (view === 'edit') { g.fillStyle = '#ff7026'; g.font = 'bold ' + Math.round(s * 0.45) + 'px sans-serif'; g.fillText(pit.kind === TL.SHIFT ? '→' : '→→', (pit.cell % COLS) * s, (pit.row + 0.7) * s); }
     }
     if (world) for (var b = 0; b < world.blocks.length; b++) { var bl = world.blocks[b]; if (bl.st !== 3) { var bc = blockCell(map, b), bx = bl.c * s, byy = bl.y * sc;
       if (bl.st === 0 && view === 'play' && !(reveal && reveal[bc])) ART3.tile(g, 'g', variant(map, bl.c, (bc / COLS) | 0), bx, byy, s);
@@ -167,7 +167,7 @@
       pieces: [], frames: frames, squash: cause === 'block' };
     g.shake = 14; SFX.death(); if (window.XHS && XHS.vibrate) XHS.vibrate('heavy');
     updStat(); var dc = $('pDeaths'), bd = $('bigD'); dc.classList.remove('bump'); bd.classList.remove('bump'); void dc.offsetWidth; dc.classList.add('bump'); bd.classList.add('bump');
-    if (g.deaths === 3) setInfo('提示：' + g.hint);
+    if (g.deaths === 3 || (g.mode === 'demo' && g.levelIdx === 2 && g.deaths === 1)) setInfo('提示：' + g.hint);
   }
   function stepDeath(g) {
     var d = g.dseq; d.t++;
@@ -185,7 +185,7 @@
   var game = null;
   function trapHint(map) { var h = [];
     for (var i = 0; i < map.length; i++) { if (map[i] === TL.COL && h.indexOf('有的地板踩上去会塌') < 0) h.push('有的地板踩上去会塌');
-      if (map[i] === TL.SHIFT) h.push('坑会向左移动，提前跳'); if (map[i] === TL.CHASE) h.push('先跳，再继续跑，别停在扩大的坑前');
+      if (map[i] === TL.SHIFT) h.push('起跳会让坑追向右边落点，可以先引发再跳'); if (map[i] === TL.CHASE) h.push('先跳，再继续跑，别停在扩大的坑前');
       if (map[i] === TL.HID && h.indexOf('平地上有藏起来的刺') < 0) h.push('平地上有藏起来的刺'); if (map[i] === TL.FALL && h.indexOf('有方块会从上面掉下来') < 0) h.push('有方块会从上面掉下来'); }
     return h.length ? h.join('；') + '。' : '这关没有恶搞机关。'; }
   function startPlay(opts) {
@@ -329,7 +329,7 @@
     var share = '《我的关，我的影子》' + (g.mode === 'demo' ? '示范关「' + g.title + '」' : '') + ' ' + (skulls || '✨') + '🏁 ' + fmt(my).replace(' ', '') + (vs ? '（' + vs + '）' : '');
     $('rShare').textContent = share; $('rShare').setAttribute('data-t', share);
     $('rNext').style.display = (g.mode === 'demo' && g.levelIdx < LEVELS.length - 1) ? '' : 'none'; $('rMsg').textContent = '';
-    if (g.mode === 'demo') { var best = +store('best_rules_v7_layout_v13_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v7_layout_v13_' + g.levelIdx, String(my)); }
+    if (g.mode === 'demo') { var best = +store('best_rules_v8_layout_v14_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v8_layout_v14_' + g.levelIdx, String(my)); }
     show('sResult');
   }
 
@@ -749,7 +749,7 @@
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
     startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: (i + 1) + '. ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
-    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v7_layout_v13_' + i) || 0;
+    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v8_layout_v14_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';
       b.onclick = function () { playDemo(i); }; list.appendChild(b); }); }
   $('rAgain').onclick = function () { var g = game; if (!g) return show('sMenu'); if (g.mode === 'demo') playDemo(g.levelIdx); else startChallenge(g.snapshot, g.ghostLabel); };

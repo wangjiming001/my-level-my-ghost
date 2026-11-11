@@ -23,6 +23,7 @@ assert.equal(JSON.parse(M.encodeSnapshot(d.map,d.inputs)).v,3,'resharing old map
 assert.equal(M.decodeSnapshot(require('./v2_snapshot_fixture.json')).version,2);
 assert.equal(M.decodeSnapshot(require('./v4_snapshot_fixture.json')).version,4);
 assert.equal(M.decodeSnapshot(require('./v5_snapshot_fixture.json')).version,5);
+require('./v7_snapshot_fixtures.json').forEach(function (json) { assert.equal(M.decodeSnapshot(json).version,7); });
 require('../src/demo_ghosts.json').forEach(function (json) { var a=M.decodeSnapshot(json); assert.equal(a.version,M.VERSION); assert(M.utf8len(json)<=2048); });
 assert.equal(M.decodeSnapshot(require('./v6_snapshot_fixture.json')).version,6);
-console.log('PASS: close-only spike/block triggers, airborne exclusion, reset/clone determinism, v2-v7 compatibility');
+console.log('PASS: close-only spike/block triggers, airborne exclusion, reset/clone determinism, v2-v8 compatibility');

@@ -3,7 +3,8 @@ var M = require('./src/engine.js'), L = require('./src/levels.js'), solve = requ
 
 var ghosts = L.map(function (l, i) {
   // Beam pruning can miss valid fine-step routes; try a distinct coarse search too.
-  var m = M.parseRows(l.rows), s = solve(m, 4, 400, 3000) || solve(m, 8, 200, 1500);
+  var m = M.parseRows(l.rows), authored = i === 2 && M.VERSION >= 8 ? require('./test/dynamic_pit_routes').baitRoute(m).inputs : null;
+  var s = authored || solve(m, 4, 400, 3000) || solve(m, 8, 200, 1500);
   if (!s) throw new Error('unsolved ' + i + ' ' + l.name);
   var j = M.encodeSnapshot(m, s);
   M.decodeSnapshot(j);

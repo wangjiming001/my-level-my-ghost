@@ -1,4 +1,4 @@
-/* Demo layout v13: expectation, reversal, learned solution. Physics unchanged. */
+/* Demo layout v14: expectation, reversal, learned solution. Physics unchanged. */
 var MLMG_TEMPLATES = [
   { id: 'flat', name: '直走过', rows: [
     '............',
@@ -59,8 +59,8 @@ var MLMG_LEVELS = [
     ]
   },
   {
-    "name": "坑也会跑",
-    "hint": "坑会往左移。靠近时提前跳，让坑移到身后，再落到右侧地面。",
+    "name": "落点也会跑",
+    "hint": "起跳后坑会向右追落点。可以先在安全地面小跳引发，等坑停住，再跳过新的位置。",
     "rows": [
       "............",
       "............",
@@ -68,13 +68,13 @@ var MLMG_LEVELS = [
       "............",
       "............",
       "S.........G.",
-      "######m#####",
+      "####m#######",
       "############"
     ]
   },
   {
     "name": "跳完别停",
-    "hint": "先跳过开坑处，再持续向右跑。停下来，身后扩大的坑会追上你；单纯直跑不跳也会掉下去。",
+    "hint": "先跳过开坑处，随后持续向右。坑会加速追来，别在追赶中停顿；到右侧稳地就安全了。",
     "rows": [
       "............",
       "............",
