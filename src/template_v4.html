@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>我的关，我的影子</title>
+  <!-- CREDITS / LICENSES (all art is CC0 1.0 public domain: https://creativecommons.org/publicdomain/zero/1.0/)
+  - Pixel Adventure 1 by Pixel Frog (https://pixelfrog-assets.itch.io/pixel-adventure-1) — Mask Dude, green grass tiles, spikes, trampoline, falling-block brick, checkpoint flags, dust particle, tiled backgrounds. CC0 1.0.
+  - Emotes Pack by Kenney (www.kenney.nl) — laugh / swirl / stars / sweat / ! / ? overlays on death comedy. CC0.
+  - Shape Characters by Kenney (www.kenney.nl) — face parts used on trap taunts. CC0.
+  Sprites were trimmed, nearest-neighbor scaled and packed into one atlas; no other changes in meaning. Code/game: original. -->
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<div id="app">
+<section id="sMenu" class="scr on"><div class="col" style="margin:auto 0">
+  <div style="text-align:center"><canvas id="logo" width="240" height="120" style="width:180px;height:90px"></canvas></div>
+  <h1 style="text-align:center">我的关，我的影子</h1>
+  <div class="sub" style="text-align:center">自己出坑关，自己先通关，<br>把影子留给下一个人追。</div>
+  <button type="button" class="pri" id="mDemo" style="padding:18px">示范关（被坑一下）</button>
+  <button type="button" class="mint" id="mEdit" style="padding:18px">我来出一关</button>
+  <button type="button" id="mImport" style="padding:16px">挑战别人的关（粘贴快照）</button>
+  <button type="button" class="pri" id="mNote" style="padding:16px">分享这个游戏到笔记</button>
+  <div class="small" style="text-align:center">把游戏推荐给别人。想让人来跑你的关，请从挂着本工具的笔记里打开，再发到评论。</div>
+  <div class="err" id="mMsg"></div>
+  <div class="small" style="text-align:center">离线小工具 v0.6 · 不联网 · 不收集任何个人信息<br>美术：Pixel Adventure 1（Pixel Frog，CC0）；表情/脸：Kenney（CC0）</div>
+
+  <div id="dbgPanel" class="card">
+    <div class="row" style="align-items:center"><b style="flex:2">启动参数调试（真机）</b><button type="button" id="dbgRefresh" style="flex:1">刷新</button></div>
+    <div class="small">从评论点进来时，快照字段名需真机确认。下面会打印 URL、query、hash，以及 window.xhs、launchOptions、getLaunchOptions 的全部字段。发现疑似快照会自动尝试开关。</div>
+    <pre id="dbgOut">正在读取启动参数…</pre>
+  </div>
+
+</div></section>
+
+<section id="sLevels" class="scr"><div class="col">
+  <div class="row" style="align-items:center"><h2 style="flex:3">示范关</h2><button type="button" id="lvBack" style="flex:1">返回</button></div>
+  <div class="sub">每关一个影子：<b>AI 示范</b>（程序求出的最短路线，不是真人）。死 3 次会给提示。</div>
+  <div id="lvlList" class="col" style="padding:0"></div>
+</div></section>
+
+<section id="sPlay" class="scr">
+  <div id="hud"><button type="button" id="pBack">‹ 返回</button><div class="t" id="pTitle"></div><div class="st"><span id="pDeaths" class="dc">💀0</span> <span id="pTime">⏱0.0s</span></div><button type="button" id="pMute">🔊</button></div>
+  <div id="stageWrap"><canvas id="cv"></canvas><div id="toast"></div></div>
+  <div id="legend"></div>
+  <div id="info"></div>
+  <div id="bigD" class="dc"></div>
+  <div id="edit">
+    <div id="tpl"></div>
+    <div id="pal"></div>
+    <div id="editMsg"></div>
+    <div id="editBtns">
+      <button type="button" id="eUndo">撤销</button><button type="button" id="eClear">重置开局</button>
+      <button type="button" id="eBack">返回菜单</button>
+      <button type="button" class="pri" id="eTest">试玩并录制</button><button type="button" class="mint" id="eExport" disabled>导出快照</button>
+    </div>
+  </div>
+  <div id="pad"><button type="button" id="bL">左</button><button type="button" id="bR">右</button><button type="button" id="bJ" class="j">跳</button></div>
+</section>
+
+<section id="sExport" class="scr"><div class="col">
+  <div class="row" style="align-items:center"><h2 style="flex:3">关卡快照</h2><button type="button" id="xBack" style="flex:1">返回编辑</button></div>
+  <img id="prevImg" alt="关卡预览">
+  <div class="small">↑ 评论配图（陷阱伪装成普通地形，只露出你死过的地方；图片不占 2KB 额度）</div>
+  <div class="card"><div class="row" style="justify-content:space-between"><span>快照大小</span><b id="xBytes"></b></div><div class="bar"><div id="xBar"></div></div>
+    <div class="small" id="xMeta"></div></div>
+  <textarea id="xJson" readonly></textarea>
+  <div class="row"><button type="button" id="xCopy">复制快照</button><button type="button" id="xLink">生成分享链接</button></div>
+  <textarea id="xLinkTxt" readonly style="display:none;min-height:70px"></textarea>
+  <button type="button" id="xSelf">挑战自己的影子</button>
+  <button type="button" class="pri" id="xXhs">把关卡发到评论</button>
+  <div class="small">需从挂着本工具的笔记里打开</div>
+  <div class="err" id="xMsg"></div>
+</div></section>
+
+<section id="sImport" class="scr"><div class="col">
+  <div class="row" style="align-items:center"><h2 style="flex:3">挑战别人的关</h2><button type="button" id="iBack" style="flex:1">返回</button></div>
+  <div class="sub">把别人发的快照 JSON 粘贴进来。加载时会重新跑一遍作者的影子，没真的通关就拒绝。</div>
+  <textarea id="iJson" placeholder='{"v":1,"m":"...","g":"...","f":300,"c":"..."}'></textarea>
+  <button type="button" class="pri" id="iGo">加载并挑战</button>
+  <div class="err" id="iMsg"></div>
+  <details class="small"><summary>启动数据（调试，用于真机找快照字段）</summary><pre id="iDbg" style="white-space:pre-wrap;word-break:break-all"></pre></details>
+</div></section>
+
+<section id="sResult" class="scr"><div class="col" style="margin:auto 0">
+  <div class="big" id="rBig">通关！</div>
+  <div class="vs" id="rVs"></div>
+  <img id="rCard" alt="成绩卡" style="width:100%;border-radius:14px">
+  <div class="small" id="rShare" style="line-height:1.6"></div>
+  <button type="button" id="rCopy">复制成绩</button>
+  <div class="row"><button type="button" class="pri" id="rAgain">再挑战</button><button type="button" class="mint" id="rMake">我也造一关</button></div>
+  <div class="row"><button type="button" id="rNext">下一关</button><button type="button" id="rMenu">回菜单</button></div>
+  <div class="ok" id="rMsg"></div>
+</div></section>
+</div>
+<div id="appToast" role="status"></div>
+<script src="./js/engine.js"></script>
+<script src="./js/atlas_meta.js"></script>
+<script src="./js/art.js"></script>
+<script src="./js/art3.js"></script>
+<script src="./js/levels.js"></script>
+<script src="./js/demo_ghosts.js"></script>
+<script src="./js/platform.js"></script>
+<script src="./js/ui.js"></script>
+</body>
+</html>

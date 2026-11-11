@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# source maps
+*.map
+
+# OS junk
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+credentials.*.json
+secrets.json
+secrets.*.json
