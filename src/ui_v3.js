@@ -68,6 +68,12 @@
   function drawMap(g, map, sc, world, view, t, reveal) {
     var s = T * sc, i, c, r, x, y, tt;
     ART3.bg(g, COLS * s, ROWS * s, t);
+    // Conceal the empty shaft below an intact false floor during play/cards.
+    // It is decorative earth only; disappears with its supporting trap.
+    if (view !== 'edit') for (var ci = 0; ci < map.length; ci++) if (map[ci] === TL.COL && !(reveal && reveal[ci]) && (!world || world.collapse[ci] >= 0)) {
+      var cc = ci % COLS, cr = (ci / COLS) | 0;
+      for (var rr = cr + 1; rr < ROWS && map[rr * COLS + cc] === TL.E; rr++) ART3.tile(g, 'g', 'D', cc * s, rr * s, s);
+    }
     for (i = 0; i < map.length; i++) {
       tt = map[i]; c = i % COLS; r = (i / COLS) | 0; x = c * s; y = r * s;
       var rv = reveal && reveal[i], v = variant(map, c, r);
@@ -180,8 +186,8 @@
       ghostLabel: opts.ghostLabel || '作者', levelIdx: opts.levelIdx, hint: opts.hint || trapHint(opts.map), snapshot: opts.snapshot || null,
       tick: 0, deaths: 0, rec: [], done: false, gDone: false, dseq: null, shake: 0, reveal: {}, deathsAt: [], squash: 0, spawnT: 10 };
     $('pTitle').textContent = opts.title; editor.on = false; $('sPlay').classList.remove('editing'); $('edit').classList.remove('on'); $('pad').style.display = 'flex';
-    $('legend').innerHTML = game.ghost ? '<span><i style="background:' + C.hero + '"></i>你</span><span><i style="background:#c8cde0;opacity:.6"></i>' + game.ghostLabel + '的影子</span><span>翻车后快速重来，可点任意键跳过动作</span>' : '<span>翻车后快速重来，可点任意键跳过动作</span>';
-    setInfo(opts.mode === 'record' ? '先自己通关一次：<b>这次干净通关的操作会被录成影子</b>。死了从头录，最长 20 秒。' : (game.ghost ? '和' + game.ghostLabel + '的影子同时起跑，到达<b>终点旗</b>就算赢。' : '到达<b>终点旗</b>就算赢。'));
+    $('legend').innerHTML = opts.mode === 'demo' ? '<span>先自己试试；翻车 3 次后出现示范影子</span><span>翻车后快速重来</span>' : game.ghost ? '<span><i style="background:' + C.hero + '"></i>你</span><span><i style="background:#c8cde0;opacity:.6"></i>' + game.ghostLabel + '的影子</span><span>翻车后快速重来，可点任意键跳过动作</span>' : '<span>翻车后快速重来，可点任意键跳过动作</span>';
+    setInfo(opts.mode === 'demo' ? '先自己找路，到达<b>终点旗</b>就算赢。' : opts.mode === 'record' ? '先自己通关一次：<b>这次干净通关的操作会被录成影子</b>。死了从头录，最长 20 秒。' : (game.ghost ? '和' + game.ghostLabel + '的影子同时起跑，到达<b>终点旗</b>就算赢。' : '到达<b>终点旗</b>就算赢。'));
     show('sPlay'); updStat();
   }
   function setInfo(h) { $('info').innerHTML = h; }
@@ -315,7 +321,7 @@
     var share = '《我的关，我的影子》' + (g.mode === 'demo' ? '示范关「' + g.title + '」' : '') + ' ' + (skulls || '✨') + '🏁 ' + fmt(my).replace(' ', '') + (vs ? '（' + vs + '）' : '');
     $('rShare').textContent = share; $('rShare').setAttribute('data-t', share);
     $('rNext').style.display = (g.mode === 'demo' && g.levelIdx < LEVELS.length - 1) ? '' : 'none'; $('rMsg').textContent = '';
-    if (g.mode === 'demo') { var best = +store('best_rules_v6_layout_v11_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v6_layout_v11_' + g.levelIdx, String(my)); }
+    if (g.mode === 'demo') { var best = +store('best_rules_v6_layout_v12_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v6_layout_v12_' + g.levelIdx, String(my)); }
     show('sResult');
   }
 
@@ -353,7 +359,7 @@
     if (d && d.phase === 'replay') { renderReplay(g, d); return; }
     applyCamera(g.world);
     drawMap(ctx, g.map, scale, g.world, 'play', rt);
-    if (g.gworld && !g.gDone) { var gw = g.gworld, gb = hb(gw), go = bearState(gw, g.tick); go.alpha = 0.5; go.tint = 'rgba(150,170,255,0.55)'; ART3.bear(ctx, gb[0], gb[1], gb[2], gb[3], go); }
+    if (g.gworld && !g.gDone && (g.mode !== 'demo' || g.deaths >= 3)) { var gw = g.gworld, gb = hb(gw), go = bearState(gw, g.tick); go.alpha = 0.5; go.tint = 'rgba(150,170,255,0.55)'; ART3.bear(ctx, gb[0], gb[1], gb[2], gb[3], go); }
     var w = g.world, p = hb(w);
     if (!d) { ART3.bear(ctx, p[0], p[1], p[2], p[3], heroOpts(w, g)); if (w.vy > 150 && !w.grounded) ART3.emote(ctx, 'drops', p[0] + p[2] * 1.05, p[1] + s * 0.05, s * 0.5); }
     else if (d.phase === 'hit') { ctx.fillStyle = 'rgba(255,255,255,' + (d.t < 2 ? 0.55 : 0) + ')'; ctx.fillRect(0, 0, COLS * s, ROWS * s);
@@ -735,7 +741,7 @@
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
     startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: (i + 1) + '. ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
-    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v6_layout_v11_' + i) || 0;
+    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v6_layout_v12_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';
       b.onclick = function () { playDemo(i); }; list.appendChild(b); }); }
   $('rAgain').onclick = function () { var g = game; if (!g) return show('sMenu'); if (g.mode === 'demo') playDemo(g.levelIdx); else startChallenge(g.snapshot, g.ghostLabel); };

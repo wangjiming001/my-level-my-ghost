@@ -125,7 +125,7 @@ var bad = {
     x.m = M.b64enc(M.packMap(m)); return JSON.stringify(resign(x)); })(),
   '影子换成乱码并重签': (function () { var x = JSON.parse(good); x.g = '////////'; return JSON.stringify(resign(x)); })(),
   '影子varint超长并重签': (function () { var x = JSON.parse(good); x.g = M.b64enc(new Uint8Array([0, 255, 255, 255, 255, 1])); return JSON.stringify(resign(x)); })(),
-  '影子是别的关的(重签)': (function () { var x = JSON.parse(good), y; for (var j = 1; j < ghosts.length; j++) { var candidate = M.decodeSnapshot(ghosts[j]); if (M.simulate(map0, candidate.inputs).result !== 'win') { y = JSON.parse(ghosts[j]); break; } } if (!y) throw new Error('No invalid foreign route fixture'); x.g = y.g; x.f = y.f; return JSON.stringify(resign(x)); })(),
+  '影子是别的关的(重签)': (function () { var x = JSON.parse(good), foreign = M.parseRows(L.templates[0].rows), steps = new Uint8Array(1200).fill(M.IN.R), result = M.simulate(foreign, steps); var y = JSON.parse(M.encodeSnapshot(foreign, steps.slice(0, result.frame))); x.g = y.g; x.f = y.f; return JSON.stringify(resign(x)); })(),
   '链接hash注入': 'HASH:<script>alert(1)</script>'
 };
 var crashes = 0;

@@ -1,26 +1,24 @@
-// Authored control plans verify the intended deception, beyond solver reachability.
-const assert=require('assert'),M=require('../src/engine'),L=require('../src/levels'),ghosts=require('../src/demo_ghosts.json');
+// The opening chapter varies the player's expectation, not jump precision.
+const assert=require('assert'),M=require('../src/engine'),L=require('../src/levels'),fixtures=require('./mechanic_fixtures.json');
 const hold=(a,n)=>Array(n).fill(a);
-function play(i,seq){const w=new M.World(M.parseRows(L[i].rows));let ev=0;for(const a of seq){w.step(a);ev|=w.ev;if(w.dead||w.won)break}return{w,ev}}
-function win(i,seq){const r=play(i,seq);assert(r.w.won,L[i].name+' learned route');assert(M.utf8len(M.encodeSnapshot(r.w.map,seq.slice(0,r.w.tick)))<=2048);return r}
-// Flat-looking finish: running dies; a broad 12-tick takeoff window clears it.
-assert.equal(play(0,hold(2,300)).w.cause,'hidden');
-for(const t of [104,108,112,116])win(0,hold(2,t).concat(hold(6,20),hold(2,240)));
-// A bridge is not a resting place: walking loses support; jumping from firm land works.
-assert.equal(play(1,hold(2,300)).w.cause,'collapse');
-for(const t of [68,76,84])win(1,hold(2,t).concat(hold(6,20),hold(2,240)));
-// Falling block: first impact, safe edge bait, full learned route are paired separately.
-const bait=require('./falling_block_route_test').run(M.parseRows(L[2].rows));assert(bait.w.won);
-// Spring must actually launch the proof route; removing it makes the same route fail.
-const d=M.decodeSnapshot(ghosts[3]),spring=play(3,d.inputs);assert(spring.w.won&&(spring.ev&32));
-const noSpring=new Uint8Array(d.map);for(let i=0;i<noSpring.length;i++)if(noSpring[i]===M.TILE.TRM)noSpring[i]=M.TILE.E;
-assert.notEqual(M.simulate(noSpring,d.inputs).result,'win');
-// The visible nearby landing is lethal, unlike the intended upper platform.
-const wrong=new M.World(M.parseRows(L[3].rows));wrong.x=7*M.T+200;wrong.y=4*M.T-M.PH;for(let k=0;k<80&&!wrong.dead;k++)wrong.step(0);assert.equal(wrong.cause,'spike');
-// Beating the bridge alone does not beat the finish trap. Two separate jumps do.
-const firstOnly=play(4,hold(2,52).concat(hold(6,20),hold(2,240)));assert.equal(firstOnly.w.cause,'hidden');
-for(const [t,gap] of [[52,44],[56,40]])win(4,hold(2,t).concat(hold(6,20),hold(2,gap),hold(6,36),hold(2,240)));
-// Harder layout still allows stopping for any duration before the second jump.
-for(const pause of [30,90,180])for(const runup of [14,16])win(4,hold(2,52).concat(hold(6,20),hold(2,28),hold(0,pause),hold(2,runup),hold(6,40),hold(2,240)));
-const tooShort=play(4,hold(2,52).concat(hold(6,20),hold(2,44),hold(6,20),hold(2,240)));assert.equal(tooShort.w.cause,'spike','second short jump fails on the following visible spike');
-console.log('PASS: finish surprise, collapse crossing, block bait, required spring, two-jump landing reversal; forgiving input windows; <=2KB');
+function play(i,seq){const w=new M.World(M.parseRows(L[i].rows));for(const a of seq){w.step(a);if(w.dead||w.won)break}return w}
+function win(i,seq){const w=play(i,seq);assert(w.won,L[i].name+' learned route');assert(M.utf8len(M.encodeSnapshot(w.map,seq.slice(0,w.tick)))<=2048);return w}
+for(let i=0;i<5;i++)assert(play(i,hold(2,300)).dead,'blind run interrupted in '+i);
+// One late surprise. 40 ticks (0.67 s) of tested takeoff flexibility.
+for(const t of [104,112,120,128,136,144])win(0,hold(2,t).concat(hold(6,20),hold(2,240)));
+// A second trap after the first: early and late approaches both work.
+assert.equal(play(1,hold(2,40).concat(hold(6,20),hold(2,240))).cause,'collapse');
+for(const t of [32,40,48,56])for(const total of [112,120,128])win(1,hold(2,t).concat(hold(6,20),hold(2,total-t-20),hold(6,20),hold(2,240)));
+// Visible first gap does not tell the whole story: following ordinary ground collapses.
+assert.equal(play(2,hold(2,28).concat(hold(6,20),hold(2,240))).cause,'collapse');
+for(const t of [20,28,36])for(const total of [76,84,92])win(2,hold(2,t).concat(hold(6,20),hold(2,total-t-20),hold(6,20),hold(2,240)));
+// The surprise moves to the beginning; one ordinary jump is enough.
+for(const t of [16,20,24,28,32,36,40])win(3,hold(2,t).concat(hold(6,20),hold(2,240)));
+// Keep the approved fifth-level surprise; remove the precision spike added in v11.
+assert(!L[4].rows.join('').includes('^'),'no extra visible spike');
+assert.equal(play(4,hold(2,52).concat(hold(6,20),hold(2,240))).cause,'hidden');
+for(const t of [52,56,60,64,68,72,76])win(4,hold(2,t).concat(hold(6,20),hold(2,128-t-20),hold(6,20),hold(2,240)));
+for(const pause of [30,90,180])for(const runup of [24,28,32])win(4,hold(2,52).concat(hold(6,20),hold(2,28),hold(0,pause),hold(2,runup),hold(6,20),hold(2,240)));
+// Retain regression coverage of advanced mechanics outside the opening chapter.
+assert(require('./falling_block_route_test').run(M.parseRows(fixtures.block)).w.won);
+console.log('PASS: five expectation reversals; blind/learned route pairs; broad takeoff windows; fifth-level pause and ordinary jump; <=2KB');

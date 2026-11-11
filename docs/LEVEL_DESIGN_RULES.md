@@ -160,4 +160,6 @@ v2/v3 解码后的地图带有规则版本；角色、影子、校验模拟和�
 
 ## 11. 当前示范关布局
 
-布局 v10 见 [DEMO_LAYOUTS.md](DEMO_LAYOUTS.md)。每关记录预期、反转、解法及成对验收，使用已有 v6 能力，不改变物理。
+布局 v12 见 [DEMO_LAYOUTS.md](DEMO_LAYOUTS.md)。每关记录预期、反转、解法及成对验收，使用已有 v6 能力，不改变物理。
+
+原作开头五关的实际操作与渲染帧依据见 [LEVEL_DEVIL_FIRST_FIVE_STUDY.md](LEVEL_DEVIL_FIRST_FIVE_STUDY.md)。轻量开篇优先知识难度，验收普通跳和宽操作余量，不将所有关统一成边缘诱发等待题。
