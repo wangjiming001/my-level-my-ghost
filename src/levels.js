@@ -1,4 +1,4 @@
-/* Demo layout v10: expectation, reversal, learned solution. Physics unchanged. */
+/* Demo layout v11: expectation, reversal, learned solution. Physics unchanged. */
 var MLMG_TEMPLATES = [
   { id: 'flat', name: '直走过', rows: [
     '............',
@@ -66,13 +66,13 @@ var MLMG_LEVELS = [
     'S..##..^....',
     '############',
     '############'] },
-  { name: '跳过去就安全？', hint: '先看清落点：短桥会塌，桥后的平地还藏着刺。用两次跳跃：先落在桥后安全处，松开跳键，再跳过终点前的隐刺。', rows: [
+  { name: '跳过去就安全？', hint: '桥后只有一小段稳地，别一口气冲过去。先越过塌桥，松开跳键、收步落稳；第二跳按住，连同后面的明刺一起跨过去。', rows: [
     '............',
     '............',
     '............',
     '............',
     '............',
-    'S.......h.G.',
+    'S......h^.G.',
     '####cc######',
     '####..######'] }
 ];

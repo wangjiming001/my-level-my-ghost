@@ -2,7 +2,8 @@ var fs = require('fs'), path = require('path');
 var M = require('./src/engine.js'), L = require('./src/levels.js'), solve = require('./test/solver.js'), acorn = require('acorn');
 
 var ghosts = L.map(function (l, i) {
-  var m = M.parseRows(l.rows), s = solve(m, 4, 400, 3000);
+  // Beam pruning can miss valid fine-step routes; try a distinct coarse search too.
+  var m = M.parseRows(l.rows), s = solve(m, 4, 400, 3000) || solve(m, 8, 200, 1500);
   if (!s) throw new Error('unsolved ' + i + ' ' + l.name);
   var j = M.encodeSnapshot(m, s);
   M.decodeSnapshot(j);

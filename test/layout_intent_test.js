@@ -19,5 +19,8 @@ assert.notEqual(M.simulate(noSpring,d.inputs).result,'win');
 const wrong=new M.World(M.parseRows(L[3].rows));wrong.x=7*M.T+200;wrong.y=4*M.T-M.PH;for(let k=0;k<80&&!wrong.dead;k++)wrong.step(0);assert.equal(wrong.cause,'spike');
 // Beating the bridge alone does not beat the finish trap. Two separate jumps do.
 const firstOnly=play(4,hold(2,52).concat(hold(6,20),hold(2,240)));assert.equal(firstOnly.w.cause,'hidden');
-for(const [t,gap] of [[52,52],[52,56],[56,48],[56,52]])win(4,hold(2,t).concat(hold(6,20),hold(2,gap),hold(6,20),hold(2,240)));
+for(const [t,gap] of [[52,44],[56,40]])win(4,hold(2,t).concat(hold(6,20),hold(2,gap),hold(6,36),hold(2,240)));
+// Harder layout still allows stopping for any duration before the second jump.
+for(const pause of [30,90,180])for(const runup of [14,16])win(4,hold(2,52).concat(hold(6,20),hold(2,28),hold(0,pause),hold(2,runup),hold(6,40),hold(2,240)));
+const tooShort=play(4,hold(2,52).concat(hold(6,20),hold(2,44),hold(6,20),hold(2,240)));assert.equal(tooShort.w.cause,'spike','second short jump fails on the following visible spike');
 console.log('PASS: finish surprise, collapse crossing, block bait, required spring, two-jump landing reversal; forgiving input windows; <=2KB');

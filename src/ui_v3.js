@@ -315,7 +315,7 @@
     var share = '《我的关，我的影子》' + (g.mode === 'demo' ? '示范关「' + g.title + '」' : '') + ' ' + (skulls || '✨') + '🏁 ' + fmt(my).replace(' ', '') + (vs ? '（' + vs + '）' : '');
     $('rShare').textContent = share; $('rShare').setAttribute('data-t', share);
     $('rNext').style.display = (g.mode === 'demo' && g.levelIdx < LEVELS.length - 1) ? '' : 'none'; $('rMsg').textContent = '';
-    if (g.mode === 'demo') { var best = +store('best_rules_v6_layout_v10_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v6_layout_v10_' + g.levelIdx, String(my)); }
+    if (g.mode === 'demo') { var best = +store('best_rules_v6_layout_v11_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v6_layout_v11_' + g.levelIdx, String(my)); }
     show('sResult');
   }
 
@@ -735,7 +735,7 @@
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
     startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: (i + 1) + '. ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
-    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v6_layout_v10_' + i) || 0;
+    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v6_layout_v11_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';
       b.onclick = function () { playDemo(i); }; list.appendChild(b); }); }
   $('rAgain').onclick = function () { var g = game; if (!g) return show('sMenu'); if (g.mode === 'demo') playDemo(g.levelIdx); else startChallenge(g.snapshot, g.ghostLabel); };
