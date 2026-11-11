@@ -61,11 +61,39 @@ const { chromium } = require('playwright-core');
     assert.equal(note.mediaInfo.image_resources[0].url, 'mock-result-image');
     assert(!note.miniToolSnapshotInfo);
     assert(result.busy && result.failed.enabled);
-    assert(result.successMsg.includes('已打开发布笔记页'));
+    assert(result.successMsg.includes('关卡已保存'));
     assert(result.failed.message.includes('cancelled'));
     assert(result.missing.includes('小红书 App'));
     assert.deepEqual(errors, []);
+    // A fresh WebView must recover the pending snapshot, not require a new run.
+    await page.reload();
+    await page.waitForFunction(() => document.getElementById('pendingShare').style.display !== 'none');
+    const restored = await page.evaluate(async () => {
+      window.confirm = () => true;
+      const calls = [];
+      window.xhs = { miniTool: {
+        writeTempFile: () => Promise.resolve({ filePath: 'mock-pending-image' }),
+        interactionOpenApi: opts => { calls.push(opts); return Promise.resolve({ routed: true }); }
+      } };
+      const button = document.getElementById('pendingPost');
+      button.click(); button.click();
+      await new Promise(r => setTimeout(r, 30));
+      const snapshot = calls[0].payload.miniToolSnapshotInfo;
+      const decoded = MLMG.decodeSnapshot(snapshot);
+      const retained = !!JSON.parse(localStorage.getItem('mlmg_pending_share_v1'));
+      const msg = document.getElementById('pendingMsg').textContent;
+      document.getElementById('pendingClear').click();
+      await new Promise(r => setTimeout(r, 30));
+      return { count: calls.length, cells: Array.from(decoded.map), expected: Array.from(MLMG.parseRows(MLMG_LEVELS[0].rows)), retained, msg, cleared: document.getElementById('pendingShare').style.display === 'none' };
+    });
+    assert.equal(restored.count, 1);
+    assert.deepEqual(restored.cells, restored.expected);
+    assert(restored.retained && restored.cleared);
+    assert(restored.msg.includes('请确认发送'));
+    await page.reload();
+    await page.waitForFunction(() => window.__mlmg);
+    assert.equal(await page.locator('#pendingShare').isVisible(), false);
     await page.screenshot({ path: '/workspace/redapp-skill-audit/result-note-preview.png', fullPage: true });
-    console.log('PASS: demo result image/content, double tap, failure recovery, missing API');
+    console.log('PASS: result note, persistence across reload, same-level comment snapshot, duplicate prevention, explicit cleanup');
   } finally { await browser.close(); server.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

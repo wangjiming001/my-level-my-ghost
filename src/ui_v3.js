@@ -554,6 +554,48 @@
       return { map: map, reveal: reveal };
     } catch (e) { return null; }
   }
+  var PENDING_KEY = 'mlmg_pending_share_v1', pendingShare = null, postingPending = false;
+  function updatePendingShare() {
+    $('pendingShare').style.display = pendingShare ? '' : 'none';
+    $('pendingTitle').textContent = pendingShare ? pendingShare.title : '';
+  }
+  function validPending(data) {
+    if (!data || data.v !== 1 || typeof data.title !== 'string') return null;
+    try { M.decodeSnapshot(data.snapshot); return data; } catch (e) { return null; }
+  }
+  function restorePendingShare() {
+    if (!window.XHS) return;
+    XHS.getLocalData(PENDING_KEY).then(function (data) {
+      pendingShare = validPending(data); updatePendingShare();
+    }).catch(function () { /* 保持首页可用 */ });
+  }
+  function postPendingShare() {
+    if (!pendingShare || postingPending) return;
+    var el = $('pendingMsg'), saved = pendingShare;
+    if (!window.XHS || !XHS.canComment()) { setNoteMsg(el, false, '请从要发评论的笔记进入小工具，客户端需 9.49+'); return; }
+    if (!window.confirm('请确认你已从目标笔记打开小工具。将把「' + saved.title + '」发到当前笔记的评论区，是否继续？')) return;
+    postingPending = true; $('pendingPost').disabled = true; $('pendingClear').disabled = true;
+    Promise.resolve().then(function () {
+      var d = M.decodeSnapshot(saved.snapshot);
+      var image = drawCard(d.map, [], {}, saved.title, ['影子用时 ' + fmt(d.inputs.length)], '点评论关卡卡片，挑战同一关');
+      return XHS.postComment({ content: '来挑战这一关，追上我的影子！', snapshot: saved.snapshot, dataUrl: image, saveToAlbum: false });
+    }).then(function (r) {
+      setNoteMsg(el, !!(r && r.routed), r && r.routed ? '已打开评论框，请确认发送。待分享关卡继续保留，发完后可手动清除。' : '未能打开评论框，关卡仍已保留，请重试。');
+    }).catch(function (err) {
+      setNoteMsg(el, false, '打开评论失败：' + formatXhsError(err));
+    }).then(function () { postingPending = false; $('pendingPost').disabled = false; $('pendingClear').disabled = false; });
+  }
+  $('pendingPost').onclick = postPendingShare;
+  $('pendingClear').onclick = function () {
+    if (!pendingShare || postingPending) return;
+    if (!window.confirm('清除这条待分享记录？不会删除已经发布的笔记或评论。')) return;
+    $('pendingClear').disabled = true;
+    XHS.setLocalData(PENDING_KEY, null).then(function (ok) {
+      $('pendingClear').disabled = false;
+      if (!ok) { setNoteMsg($('pendingMsg'), false, '清除未成功，请重试'); return; }
+      pendingShare = null; updatePendingShare();
+    });
+  };
   var postingNote = false;
   function setNoteMsg(el, ok, text) {
     if (el) { el.className = ok ? 'ok' : 'err'; el.textContent = text; }
@@ -561,25 +603,31 @@
   }
   function setNoteBusy(busy) {
     postingNote = busy;
-    ['mNote', 'rNote'].forEach(function (id) { var b = $(id); if (b) b.disabled = busy; });
+    ['mNote', 'rNote', 'xNote'].forEach(function (id) { var b = $(id); if (b) b.disabled = busy; });
   }
   // 首页分享游戏，结算页分享本次成绩；postNote 不携带关卡快照。
   function publishNote(source) {
     if (postingNote) return;
-    var result = source === 'result', el = $(result ? 'rMsg' : 'mMsg');
+    var result = source === 'result', exporting = source === 'export', el = $(result ? 'rMsg' : exporting ? 'xMsg' : 'mMsg');
     if (!window.XHS || typeof XHS.canPostNote !== 'function' || !XHS.canPostNote()) {
       setNoteMsg(el, false, '请在小红书 App 里打开小工具');
       return;
     }
     setNoteBusy(true);
     setNoteMsg(el, true, '正在生成分享图…');
-    var dataUrl = '', title = NOTE.TITLE, content = NOTE.CONTENT;
+    var dataUrl = '', title = NOTE.TITLE, content = NOTE.CONTENT, draft = null;
     try {
-      if (result) {
+      if (exporting) {
+        dataUrl = $('prevImg').src;
+        title = '我造了一关，来追我的影子';
+        content = '自己造关，自己先通关！我会把关卡卡片发到本篇评论，点评论卡片就能挑战同一关。\n\n#我的关我的影子';
+        draft = { v: 1, title: '我创造的关卡', snapshot: exportJson };
+      } else if (result) {
         dataUrl = $('rCard').src;
         if (dataUrl.indexOf('data:image/') !== 0) dataUrl = '';
         title = '我的关，我的影子｜通关成绩';
-        content = $('rShare').getAttribute('data-t') + '\n\n打开笔记里的小工具，一起来挑战！\n\n#我的关我的影子';
+        content = $('rShare').getAttribute('data-t') + '\n\n我会把这一关的关卡卡片发到本篇评论，点评论卡片就能挑战同一关！\n\n#我的关我的影子';
+        draft = { v: 1, title: game.mode === 'demo' ? '示范关「' + game.title + '」' : game.title, snapshot: M.encodeSnapshot(game.map, game.rec) };
       } else {
         var promo = loadPromoMap();
         dataUrl = drawShareNoteCard({ map: promo && promo.map, reveal: promo && promo.reveal, line: NOTE.SLOGAN, hint: NOTE.HINT });
@@ -587,9 +635,18 @@
     }
     catch (e) { dataUrl = ''; }
     if (!dataUrl) { setNoteBusy(false); setNoteMsg(el, false, '分享图生成失败'); return; }
-    XHS.postNote({ title: title, content: content, dataUrl: dataUrl, pageType: 'photo_publish' }).then(function () {
+    Promise.resolve().then(function () {
+      if (!draft) return true;
+      if (!validPending(draft)) throw new Error('关卡回放校验失败，无法保存待分享关卡');
+      return XHS.setLocalData(PENDING_KEY, draft).then(function (ok) {
+        if (!ok) throw new Error('关卡保存失败，请重试后再发布笔记');
+        pendingShare = draft; updatePendingShare();
+      });
+    }).then(function () {
+      return XHS.postNote({ title: title, content: content, dataUrl: dataUrl, pageType: 'photo_publish' });
+    }).then(function () {
       setNoteBusy(false);
-      setNoteMsg(el, true, '已打开发布笔记页。唤起成功不代表笔记已过审。');
+      setNoteMsg(el, true, draft ? '关卡已保存。发布笔记后，从新笔记重新打开小工具，在首页把关卡发到评论。' : '已打开发布笔记页。唤起成功不代表笔记已过审。');
     }).catch(function (err) {
       setNoteBusy(false);
       setNoteMsg(el, false, '发布失败：' + formatXhsError(err));
@@ -629,6 +686,7 @@
   // 在线文档 3.9：评论媒体须是 writeTempFile 句柄；routed 不代表已发布。需从挂着本工具的笔记里打开。
   $('xXhs').onclick = function () { postLevelComment(); };
   // 在线文档 3.3 / 3.5：postNote 携带图文，不携带关卡快照。
+  $('xNote').onclick = function () { publishNote('export'); };
   if ($('mNote')) $('mNote').onclick = function () { publishNote(); };
 
   // ---------------- import / challenge ----------------
@@ -681,6 +739,7 @@
       return true;
     } catch (e) { if ($('iMsg')) $('iMsg').textContent = (source || '启动参数') + '里的关卡打不开：' + e.message; return false; }
   }
+  restorePendingShare();
   launchDebug();
   var started = false, h = location.hash, q = (window.XHS && XHS.collectSearch) ? XHS.collectSearch() : {};
   if (h.indexOf('#s=') === 0) started = tryStartFromText(h.slice(3), '链接 hash');
