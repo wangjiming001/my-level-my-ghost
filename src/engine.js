@@ -9,9 +9,9 @@ var MLMG = (function () {
   var JUMPV = 150, G_UP_HOLD = 5, G_UP_REL = 14, G_DOWN = 9, MAXFALL = 220;
   var COYOTE = 6, JBUF = 6;
   var COLLAPSE_DELAY = 14;                     // ticks after first step
-  var BLOCK_V0 = 24, BLOCK_G = 6, BLOCK_MAX = 200;
+  var BLOCK_V0 = 24, BLOCK_G = 6, BLOCK_MAX = 200, BLOCK_WARN = 24;
   var MAX_FRAMES = 1200;                       // 20 s @ 60 ticks/s
-  var SNAP_VERSION = 4, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
+  var SNAP_VERSION = 5, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
   // tile codes: 0-7 same as v2, 8 = trampoline (v3, 4-bit maps)
   var E = 0, GND = 1, SPK = 2, ST = 3, GL = 4, COL = 5, HID = 6, FALL = 7, TRM = 8;
   var BOUNCE_V = 300; // tuned so a no-hold bounce rises ~3 tiles
@@ -52,7 +52,7 @@ var MLMG = (function () {
     for (i = 0; i < m.length; i++) {
       if (m[i] === ST) { var c = i % COLS, r = (i / COLS) | 0;
         this.x = c * T + ((T - PW) >> 1); this.y = r * T + T - PH; }
-      if (m[i] === FALL) this.blocks.push({ c: i % COLS, y: ((i / COLS) | 0) * T, vy: 0, st: 0 }); // st 0 idle,1 falling,2 landed,3 gone
+      if (m[i] === FALL) this.blocks.push({ c: i % COLS, y: ((i / COLS) | 0) * T, vy: 0, st: 0, warn: 0 }); // st 0 idle,1 falling,2 landed,3 gone,4 warning
     }
   };
   World.prototype.solid = function (c, r, skip) {
@@ -62,7 +62,7 @@ var MLMG = (function () {
     if (t === COL && this.collapse[i] !== -1) return true;
     for (var k = 0; k < this.blocks.length; k++) {
       var b = this.blocks[k];
-      if (b !== skip && (b.st === 0 || b.st === 2) && b.c === c && b.y === r * T) return true;
+      if (b !== skip && (b.st === 0 || b.st === 2 || b.st === 4) && b.c === c && b.y === r * T) return true;
     }
     return false;
   };
@@ -131,7 +131,12 @@ var MLMG = (function () {
         var underBlock = this.rulesVersion < 4
           ? this.x < b.c * T + T + T && this.x + PW > b.c * T - T && this.y > b.y
           : this.x < b.c * T + T - 96 && this.x + PW > b.c * T + 96 && this.y > b.y + T;
-        if (underBlock) { b.st = 1; b.vy = BLOCK_V0; this.ev |= 16; }
+        if (underBlock) {
+          if (this.rulesVersion >= 5) { b.st = 4; b.warn = BLOCK_WARN; this.ev |= 64; }
+          else { b.st = 1; b.vy = BLOCK_V0; this.ev |= 16; }
+        }
+      } else if (b.st === 4) {
+        b.warn--; if (b.warn === 0) { b.st = 1; b.vy = BLOCK_V0; this.ev |= 16; }
       } else if (b.st === 1) {
         var ny = b.y + b.vy; b.vy += BLOCK_G; if (b.vy > BLOCK_MAX) b.vy = BLOCK_MAX;
         var br = fdiv(ny + T - 1);
@@ -164,14 +169,14 @@ var MLMG = (function () {
     w.map = this.map; w.rulesVersion = this.rulesVersion; w.tick = this.tick; w.cause = this.cause; w.killer = this.killer; w.lastCol = this.lastCol; w.ev = this.ev; w.face = this.face; w.coyote = this.coyote; w.jbuf = this.jbuf; w.dead = this.dead; w.won = this.won; w.grounded = this.grounded;
     w.vx = this.vx; w.vy = this.vy; w.x = this.x; w.y = this.y; w.prevJ = this.prevJ; w.jumpHeld = this.jumpHeld; w.sprung = this.sprung;
     w.collapse = new Int16Array(this.collapse); w.hidden = new Uint8Array(this.hidden);
-    w.blocks = this.blocks.map(function (b) { return { c: b.c, y: b.y, vy: b.vy, st: b.st }; });
+    w.blocks = this.blocks.map(function (b) { return { c: b.c, y: b.y, vy: b.vy, st: b.st, warn: b.warn }; });
     return w;
   };
   World.prototype.key = function () {
     var s = this.rulesVersion + ':' + (this.x >> 6) + ',' + (this.y >> 6) + ',' + (this.vy >> 3) + ',' + (this.vx >> 3) + ',' + (this.grounded ? 1 : 0) + (this.coyote > 0 ? 1 : 0) + (this.jbuf > 0 ? 1 : 0) + (this.prevJ ? 1 : 0);
     for (var i = 0; i < this.collapse.length; i++) if (this.collapse[i]) s += ',c' + i + ':' + (this.collapse[i] > 0 ? this.collapse[i] >> 2 : -1);
     for (i = 0; i < this.hidden.length; i++) if (this.hidden[i]) s += ',h' + i;
-    for (i = 0; i < this.blocks.length; i++) s += ',b' + this.blocks[i].st + ':' + (this.blocks[i].y >> 6);
+    for (i = 0; i < this.blocks.length; i++) s += ',b' + this.blocks[i].st + ':' + (this.blocks[i].y >> 6) + ':' + (this.blocks[i].warn || 0);
     return s;
   };
 
@@ -279,7 +284,7 @@ var MLMG = (function () {
     var keys = Object.keys(o).sort().join(',');
     if (keys !== 'c,f,g,m,v') throw new Error('快照字段不对');
     if (o.v === 1) throw new Error('这是第一版的快照，物理手感已更新，旧关卡影子无法回放');
-    if (o.v !== 2 && o.v !== 3 && o.v !== 4) throw new Error('快照版本不支持');
+    if (o.v !== 2 && o.v !== 3 && o.v !== 4 && o.v !== 5) throw new Error('快照版本不支持');
     if (typeof o.m !== 'string') throw new Error('地图编码长度不对');
     if (o.v === 2 && o.m.length !== 48) throw new Error('地图编码长度不对');
     if (o.v >= 3 && o.m.length !== 64) throw new Error('地图编码长度不对');
@@ -305,7 +310,7 @@ var MLMG = (function () {
     try { return decodeURIComponent(escape(str)); } catch (e) { throw new Error('链接数据编码错误'); } }
 
   return {
-    VERSION: SNAP_VERSION, SPEED: SPEED, JUMPV: JUMPV, BOUNCE_V: BOUNCE_V, COLS: COLS, ROWS: ROWS, T: T, PW: PW, PH: PH, MAX_FRAMES: MAX_FRAMES, SNAP_LIMIT: SNAP_LIMIT, MAX_TRAPS: MAX_TRAPS,
+    VERSION: SNAP_VERSION, SPEED: SPEED, JUMPV: JUMPV, BOUNCE_V: BOUNCE_V, COLS: COLS, ROWS: ROWS, T: T, PW: PW, PH: PH, MAX_FRAMES: MAX_FRAMES, SNAP_LIMIT: SNAP_LIMIT, MAX_TRAPS: MAX_TRAPS, BLOCK_WARN: BLOCK_WARN,
     TILE: { E: E, GND: GND, SPK: SPK, ST: ST, GL: GL, COL: COL, HID: HID, FALL: FALL, TRM: TRM }, IN: { L: IN_L, R: IN_R, J: IN_J },
     World: World, parseRows: parseRows, checkMap: checkMap, isTrap: isTrap, simulate: simulate,
     inputsToEvents: inputsToEvents, eventsToInputs: eventsToInputs, packMap: packMap, unpackMap: unpackMap, packMap3: packMap3, unpackMap3: unpackMap3, packMapBits: packMapBits, unpackMapBits: unpackMapBits,

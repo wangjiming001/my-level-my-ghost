@@ -90,7 +90,7 @@
     }
     if (world) for (var b = 0; b < world.blocks.length; b++) { var bl = world.blocks[b]; if (bl.st !== 3) { var bc = blockCell(map, b), bx = bl.c * s, byy = bl.y * sc;
       if (bl.st === 0 && view === 'play' && !(reveal && reveal[bc])) ART3.tile(g, 'g', variant(map, bl.c, (bc / COLS) | 0), bx, byy, s);
-      else { ART3.block(g, bx, byy, s); if (bl.st === 1) ART3.face(g, 'f', bx + s / 2, byy + s * 0.6, s * 0.55); else if (bl.st === 2) ART3.face(g, 'h', bx + s / 2, byy + s * 0.6, s * 0.55); } } }
+      else { ART3.block(g, bx + (bl.st === 4 ? Math.sin(bl.warn * 2) * s * 0.05 : 0), byy, s); if (bl.st === 4) ART3.emote(g, 'exclamation', bx + s / 2, byy, s * 0.4); if (bl.st === 1) ART3.face(g, 'f', bx + s / 2, byy + s * 0.6, s * 0.55); else if (bl.st === 2) ART3.face(g, 'h', bx + s / 2, byy + s * 0.6, s * 0.55); } } }
     else for (i = 0; i < map.length; i++) if (map[i] === TL.FALL) { c = i % COLS; r = (i / COLS) | 0;
       if (view === 'edit' || (reveal && reveal[i])) { ART3.block(g, c * s, r * s, s); ART3.face(g, 'f', c * s + s / 2, r * s + s * 0.6, s * 0.55); }
       else ART3.tile(g, 'g', variant(map, c, r), c * s, r * s, s); }
@@ -193,7 +193,7 @@
     else {
       g.rec.push(inp);
       var ev = w.step(inp);
-      if (w.ev & 1) { SFX.jump(); g.squash = -6; } if (w.ev & 2) { SFX.land(); g.squash = 6; } if (w.ev & 32) { SFX.bounce(); g.squash = -8; } if (w.ev & 28) SFX.click();
+      if (w.ev & 1) { SFX.jump(); g.squash = -6; } if (w.ev & 2) { SFX.land(); g.squash = 6; } if (w.ev & 32) { SFX.bounce(); g.squash = -8; } if (w.ev & 92) SFX.click();
       if (ev === 1) { g.deaths++; onDeath(g); }
       else if (ev === 2) { finish(); return; }
       else if (g.mode === 'record' && w.tick >= M.MAX_FRAMES) { toast('超过 20 秒，重来'); respawn(g); }
@@ -315,7 +315,7 @@
     var share = '《我的关，我的影子》' + (g.mode === 'demo' ? '示范关「' + g.title + '」' : '') + ' ' + (skulls || '✨') + '🏁 ' + fmt(my).replace(' ', '') + (vs ? '（' + vs + '）' : '');
     $('rShare').textContent = share; $('rShare').setAttribute('data-t', share);
     $('rNext').style.display = (g.mode === 'demo' && g.levelIdx < LEVELS.length - 1) ? '' : 'none'; $('rMsg').textContent = '';
-    if (g.mode === 'demo') { var best = +store('best_rules_v4_layout_v7_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v4_layout_v7_' + g.levelIdx, String(my)); }
+    if (g.mode === 'demo') { var best = +store('best_rules_v5_layout_v8_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v5_layout_v8_' + g.levelIdx, String(my)); }
     show('sResult');
   }
 
@@ -735,7 +735,7 @@
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
     startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: (i + 1) + '. ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
-    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v4_layout_v7_' + i) || 0;
+    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v5_layout_v8_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';
       b.onclick = function () { playDemo(i); }; list.appendChild(b); }); }
   $('rAgain').onclick = function () { var g = game; if (!g) return show('sMenu'); if (g.mode === 'demo') playDemo(g.levelIdx); else startChallenge(g.snapshot, g.ghostLabel); };
