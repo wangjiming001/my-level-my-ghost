@@ -78,7 +78,7 @@ L.forEach(function (l, i) {
     ' | 快照 ' + M.utf8len(snap) + 'B, ' + M.inputsToEvents(inputs).length + '个事件');
   ok(!!coarse, 'coarse 8-tick controls can clear L' + (i + 1));
   ok(ref.result === 'win' && same === 100, 'determinism L' + (i + 1)); ok(re.frames === d.frames, 'roundtrip L' + (i + 1));
-  ok(JSON.parse(snap).v === 3, 'demo ghosts encoded as v3');
+  ok(JSON.parse(snap).v === M.VERSION, 'demo ghosts encoded with current rules');
 });
 console.log('== 2. 快照大小 & v2 兼容 ==');
 var map0 = M.parseRows(L[0].rows);
@@ -97,7 +97,7 @@ try {
   console.log('  v2 兼容解码成功, 帧=' + d2.frames + ', 地图无弹跳=' + (function () { for (var i = 0; i < d2.map.length; i++) if (d2.map[i] === 8) return false; return true; })());
 } catch (e) { ok(false, 'v2 decode: ' + e.message); }
 var v3 = JSON.parse(M.encodeSnapshot(map0, M.decodeSnapshot(ghosts[0]).inputs));
-ok(v3.v === 3 && v3.m.length === 64, 'v3 encoder writes 64-char map');
+ok(v3.v === M.VERSION && v3.m.length === 64, 'current encoder writes 64-char map');
 console.log('== 3. 拒绝测试 ==');
 var good = ghosts[0], o = JSON.parse(good);
 function mut(fn) { var x = JSON.parse(good); fn(x); return JSON.stringify(x); }
@@ -105,7 +105,7 @@ function resign(x) { x.c = M.checksum(x.v + '|' + x.m + '|' + x.g + '|' + x.f); 
 var lateGoal = (function () { var x = JSON.parse(good); x.f = x.f + 30; return JSON.stringify(resign(x)); })();
 var bad = {
   '空字符串': '', '非JSON': '{abc', '数组': '[1,2]', 'null': 'null', '超长(3000字节)': good.slice(0, -1) + ',"x":"' + 'a'.repeat(3000) + '"}',
-  '多余字段': mut(function (x) { x.x = 1; }), '版本错误': mut(function (x) { x.v = 4; }), '第一版旧快照(v1)': mut(function (x) { x.v = 1; }), '帧数为负': mut(function (x) { x.f = -5; }),
+  '多余字段': mut(function (x) { x.x = 1; }), '版本错误': mut(function (x) { x.v = 99; }), '第一版旧快照(v1)': mut(function (x) { x.v = 1; }), '帧数为负': mut(function (x) { x.f = -5; }),
   '帧数超20秒': mut(function (x) { x.f = 99999; }), '帧数小数': mut(function (x) { x.f = 10.5; }), '地图被截断': mut(function (x) { x.m = x.m.slice(0, 40); }),
   '地图非法字符': mut(function (x) { x.m = '!' + x.m.slice(1); }), '校验和不符(改一个字符)': mut(function (x) { x.g = (x.g[0] === 'A' ? 'B' : 'A') + x.g.slice(1); }),
   '篡改帧数并重签校验和(谎报更快)': (function () { var x = JSON.parse(good); x.f = x.f - 20; return JSON.stringify(resign(x)); })(),

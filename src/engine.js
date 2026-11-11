@@ -11,7 +11,7 @@ var MLMG = (function () {
   var COLLAPSE_DELAY = 14;                     // ticks after first step
   var BLOCK_V0 = 24, BLOCK_G = 6, BLOCK_MAX = 200;
   var MAX_FRAMES = 1200;                       // 20 s @ 60 ticks/s
-  var SNAP_VERSION = 3, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
+  var SNAP_VERSION = 4, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
   // tile codes: 0-7 same as v2, 8 = trampoline (v3, 4-bit maps)
   var E = 0, GND = 1, SPK = 2, ST = 3, GL = 4, COL = 5, HID = 6, FALL = 7, TRM = 8;
   var BOUNCE_V = 300; // tuned so a no-hold bounce rises ~3 tiles
@@ -41,7 +41,7 @@ var MLMG = (function () {
     return null;
   }
 
-  function World(map) { this.map = map; this.reset(); }
+  function World(map) { this.map = map; this.rulesVersion = map.rulesVersion || SNAP_VERSION; this.reset(); }
   World.prototype.reset = function () {
     var m = this.map, i;
     this.tick = 0; this.cause = ''; this.killer = -1; this.lastCol = -1; this.ev = 0; this.face = 1; this.coyote = 0; this.jbuf = 0; this.dead = false; this.won = false; this.grounded = false;
@@ -120,12 +120,18 @@ var MLMG = (function () {
     // hidden spikes pop when player approaches near floor level
     for (i = 0; i < this.map.length; i++) if (this.map[i] === HID && !this.hidden[i]) {
       c = i % COLS; r = (i / COLS) | 0;
-      if (this.x < c * T + T + 384 && this.x + PW > c * T - 384 && this.y + PH > r * T - T && this.y < r * T + T) { this.hidden[i] = 1; this.ev |= 8; }
+      var nearSpike = this.rulesVersion < 4
+        ? this.x < c * T + T + 384 && this.x + PW > c * T - 384 && this.y + PH > r * T - T && this.y < r * T + T
+        : this.x < c * T + T + 64 && this.x + PW > c * T - 64 && this.y + PH > r * T + 480 && this.y < r * T + T;
+      if (nearSpike) { this.hidden[i] = 1; this.ev |= 8; }
     }
     // falling blocks
     for (k = 0; k < this.blocks.length; k++) { var b = this.blocks[k];
       if (b.st === 0) {
-        if (this.x < b.c * T + T + T && this.x + PW > b.c * T - T && this.y > b.y) { b.st = 1; b.vy = BLOCK_V0; this.ev |= 16; }
+        var underBlock = this.rulesVersion < 4
+          ? this.x < b.c * T + T + T && this.x + PW > b.c * T - T && this.y > b.y
+          : this.x < b.c * T + T - 96 && this.x + PW > b.c * T + 96 && this.y > b.y + T;
+        if (underBlock) { b.st = 1; b.vy = BLOCK_V0; this.ev |= 16; }
       } else if (b.st === 1) {
         var ny = b.y + b.vy; b.vy += BLOCK_G; if (b.vy > BLOCK_MAX) b.vy = BLOCK_MAX;
         var br = fdiv(ny + T - 1);
@@ -155,14 +161,14 @@ var MLMG = (function () {
   };
   World.prototype.clone = function () {
     var w = Object.create(World.prototype);
-    w.map = this.map; w.tick = this.tick; w.cause = this.cause; w.killer = this.killer; w.lastCol = this.lastCol; w.ev = this.ev; w.face = this.face; w.coyote = this.coyote; w.jbuf = this.jbuf; w.dead = this.dead; w.won = this.won; w.grounded = this.grounded;
+    w.map = this.map; w.rulesVersion = this.rulesVersion; w.tick = this.tick; w.cause = this.cause; w.killer = this.killer; w.lastCol = this.lastCol; w.ev = this.ev; w.face = this.face; w.coyote = this.coyote; w.jbuf = this.jbuf; w.dead = this.dead; w.won = this.won; w.grounded = this.grounded;
     w.vx = this.vx; w.vy = this.vy; w.x = this.x; w.y = this.y; w.prevJ = this.prevJ; w.jumpHeld = this.jumpHeld; w.sprung = this.sprung;
     w.collapse = new Int16Array(this.collapse); w.hidden = new Uint8Array(this.hidden);
     w.blocks = this.blocks.map(function (b) { return { c: b.c, y: b.y, vy: b.vy, st: b.st }; });
     return w;
   };
   World.prototype.key = function () {
-    var s = (this.x >> 6) + ',' + (this.y >> 6) + ',' + (this.vy >> 3) + ',' + (this.vx >> 3) + ',' + (this.grounded ? 1 : 0) + (this.coyote > 0 ? 1 : 0) + (this.jbuf > 0 ? 1 : 0) + (this.prevJ ? 1 : 0);
+    var s = this.rulesVersion + ':' + (this.x >> 6) + ',' + (this.y >> 6) + ',' + (this.vy >> 3) + ',' + (this.vx >> 3) + ',' + (this.grounded ? 1 : 0) + (this.coyote > 0 ? 1 : 0) + (this.jbuf > 0 ? 1 : 0) + (this.prevJ ? 1 : 0);
     for (var i = 0; i < this.collapse.length; i++) if (this.collapse[i]) s += ',c' + i + ':' + (this.collapse[i] > 0 ? this.collapse[i] >> 2 : -1);
     for (i = 0; i < this.hidden.length; i++) if (this.hidden[i]) s += ',h' + i;
     for (i = 0; i < this.blocks.length; i++) s += ',b' + this.blocks[i].st + ':' + (this.blocks[i].y >> 6);
@@ -249,8 +255,9 @@ var MLMG = (function () {
     if (c < 0x80) n += 1; else if (c < 0x800) n += 2; else if (c >= 0xd800 && c < 0xdc00) { n += 4; i++; } else n += 3; } return n; }
 
   function encodeSnapshot(map, inputs) {
-    var m = b64enc(packMap(map)), g = b64enc(packEvents(inputsToEvents(inputs))), f = inputs.length;
-    var obj = { v: SNAP_VERSION, m: m, g: g, f: f, c: checksum(SNAP_VERSION + '|' + m + '|' + g + '|' + f) };
+    var version = map.rulesVersion || SNAP_VERSION;
+    var m = b64enc(version === 2 ? packMap3(map) : packMap(map)), g = b64enc(packEvents(inputsToEvents(inputs))), f = inputs.length;
+    var obj = { v: version, m: m, g: g, f: f, c: checksum(version + '|' + m + '|' + g + '|' + f) };
     return JSON.stringify(obj);
   }
   // Simulate inputs from reset; return {result:'win'|'dead'|'timeout', frame, x, y}
@@ -272,20 +279,21 @@ var MLMG = (function () {
     var keys = Object.keys(o).sort().join(',');
     if (keys !== 'c,f,g,m,v') throw new Error('快照字段不对');
     if (o.v === 1) throw new Error('这是第一版的快照，物理手感已更新，旧关卡影子无法回放');
-    if (o.v !== 2 && o.v !== 3) throw new Error('快照版本不支持');
+    if (o.v !== 2 && o.v !== 3 && o.v !== 4) throw new Error('快照版本不支持');
     if (typeof o.m !== 'string') throw new Error('地图编码长度不对');
     if (o.v === 2 && o.m.length !== 48) throw new Error('地图编码长度不对');
-    if (o.v === 3 && o.m.length !== 64) throw new Error('地图编码长度不对');
+    if (o.v >= 3 && o.m.length !== 64) throw new Error('地图编码长度不对');
     if (typeof o.g !== 'string' || o.g.length === 0 || o.g.length > 1700) throw new Error('影子编码长度不对');
     if (typeof o.f !== 'number' || (o.f | 0) !== o.f || o.f < 1 || o.f > MAX_FRAMES) throw new Error('帧数超出范围');
     if (o.c !== checksum(o.v + '|' + o.m + '|' + o.g + '|' + o.f)) throw new Error('校验和不匹配（数据损坏）');
     var map = o.v === 2 ? unpackMap3(b64dec(o.m)) : unpackMap(b64dec(o.m));
+    map.rulesVersion = o.v;
     var err = checkMap(map); if (err) throw new Error(err);
     var ev = unpackEvents(b64dec(o.g), o.f);
     var inputs = eventsToInputs(ev, o.f);
     var res = simulate(map, inputs);
     if (res.result !== 'win' || res.frame !== o.f) throw new Error('影子回放没有在第 ' + o.f + ' 帧到达终点（' + res.result + '@' + res.frame + '），拒绝加载');
-    return { map: map, inputs: inputs, frames: o.f };
+    return { map: map, inputs: inputs, frames: o.f, version: o.v };
   }
   // base64url wrapper of JSON for URL hash
   function toUtf8(s) { return unescape(encodeURIComponent(s)); }
