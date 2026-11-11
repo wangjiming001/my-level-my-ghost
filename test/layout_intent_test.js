@@ -1,22 +1,16 @@
-// The opening chapter varies the player's expectation, not jump precision.
-const assert=require('assert'),M=require('../src/engine'),L=require('../src/levels'),fixtures=require('./mechanic_fixtures.json');
-const hold=(a,n)=>Array(n).fill(a);
-function play(i,seq){const w=new M.World(M.parseRows(L[i].rows));for(const a of seq){w.step(a);if(w.dead||w.won)break}return w}
-function win(i,seq){const w=play(i,seq);assert(w.won,L[i].name+' learned route');assert(M.utf8len(M.encodeSnapshot(w.map,seq.slice(0,w.tick)))<=2048);return w}
-for(let i=0;i<5;i++)assert(play(i,hold(2,300)).dead,'blind run interrupted in '+i);
-// One late surprise. 40 ticks (0.67 s) of tested takeoff flexibility.
-for(const t of [104,112,120,128,136,144])win(0,hold(2,t).concat(hold(6,20),hold(2,240)));
-// A second trap after the first: early and late approaches both work.
-assert.equal(play(1,hold(2,40).concat(hold(6,20),hold(2,240))).cause,'collapse');
-for(const t of [32,40,48,56])for(const total of [112,120,128])win(1,hold(2,t).concat(hold(6,20),hold(2,total-t-20),hold(6,20),hold(2,240)));
-// Actual moving/expanding terrain, not fixed-cell substitutes.
-for(const t of [44,48,52,56,60,64])for(const x of [4.1,4.3,4.5,4.7]){const r=require('./dynamic_pit_routes').baitRoute(M.parseRows(L[2].rows),t,x);assert(r.w.won);win(2,r.inputs);}
-for(const t of [16,20,24,28,32,36,40])win(3,hold(2,t).concat(hold(6,20),hold(2,240)));
-// Keep the approved fifth-level surprise; remove the precision spike added in v11.
-assert(!L[4].rows.join('').includes('^'),'no extra visible spike');
-assert.equal(play(4,hold(2,52).concat(hold(6,20),hold(2,240))).cause,'hidden');
-for(const t of [52,56,60,64,68,72,76])win(4,hold(2,t).concat(hold(6,20),hold(2,128-t-20),hold(6,20),hold(2,240)));
-for(const pause of [30,90,180])for(const runup of [24,28,32])win(4,hold(2,52).concat(hold(6,20),hold(2,28),hold(0,pause),hold(2,runup),hold(6,20),hold(2,240)));
-// Retain regression coverage of advanced mechanics outside the opening chapter.
-assert(require('./falling_block_route_test').run(M.parseRows(fixtures.block)).w.won);
-console.log('PASS: five expectation reversals; blind/learned route pairs; broad takeoff windows; fifth-level pause and ordinary jump; <=2KB');
+const assert=require('assert'),M=require('../src/engine'),R=require('./v15_routes'),L=require('../src/levels');
+for(let i=0;i<5;i++){
+ assert.equal(M.checkMap(M.parseRows(L[i].rows)),null);assert(R.play(i,[]).w.dead,'blind run '+i);
+ const r=R.route(i);assert(r.w.won);const json=M.encodeSnapshot(r.w.map,r.inputs);assert(M.utf8len(json)<=2048);assert.equal(M.decodeSnapshot(json).version,9);
+}
+// Short mobile taps, with broad takeoff windows; no pixel-perfect landing requirement.
+for(const t of [122,128,134,140,146])assert(R.play(0,[t],10).w.won);
+for(const a of [72,80,88])for(const b of [126,134,142])assert(R.play(1,[a,b],10).w.won);
+for(const t of [48,54,60,66,72])assert(R.play(2,[t],10).w.won);
+for(const t of [4,8,12,16,20])assert(R.play(3,[t],10).w.won);
+for(const t of [140,146,152,158,164])assert(R.play(4,[t],10).w.won);
+// Crossing only the first opening does not solve room 2; first opening is retained.
+let r=R.play(1,[80],10);assert(r.w.dead);assert.equal(r.w.pits.filter(p=>p.st===2).length,2);
+// No hidden spike substitutes for the final sliding platform.
+assert(!L[4].rows.join('').includes('h'));assert.equal(M.parseRows(L[4].rows)[72],M.TILE.RELAY);
+console.log('PASS v15: 5 blind/known route pairs, 29 short-tap variations, <=2KB validated snapshots');

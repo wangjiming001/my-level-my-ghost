@@ -1,24 +1,17 @@
-const assert=require('assert'),M=require('../src/engine'),L=require('../src/levels'),{baitRoute}=require('./dynamic_pit_routes');
-const h=(a,n)=>Array(n).fill(a);
-function play(i,seq){let w=new M.World(M.parseRows(L[i].rows)),jumps=0,positions=[];for(const a of seq){w.step(a);jumps+=!!(w.ev&1);positions.push(w.pits.map(p=>[p.left,p.right,p.st,p.delay]));if(w.dead||w.won)break}return{w,jumps,positions}}
-assert.equal(M.VERSION,8);
-let initial=new M.World(M.parseRows(L[2].rows));assert.equal(initial.pits[0].left,4*M.T);assert.equal(initial.pits[0].right,6*M.T);assert.deepEqual(initial.solidSegments(4,6),[]);assert.deepEqual(initial.solidSegments(5,7),[]);
-// v8 moves toward the planned landing only on an actual jump near the pit.
-initial.x=3*M.T;initial.grounded=true;initial.step(0);assert.equal(initial.pits[0].st,0,'walking nearby does not give away the trap');initial.step(4);assert.equal(initial.pits[0].left,4*M.T+64);assert.deepEqual(initial.solidSegments(4,6),[[4*M.T,4*M.T+64]]);assert.deepEqual(initial.solidSegments(6,6),[[6*M.T+64,7*M.T]]);
-let clone=initial.clone();assert.equal(clone.key(),initial.key());clone.pits[0].right++;assert.notEqual(clone.key(),initial.key());clone=initial.clone();clone.pits[0].delay++;assert.notEqual(clone.key(),initial.key());clone=initial.clone();for(let t=0;t<50;t++){assert.equal(clone.step(6),initial.step(6));assert.equal(clone.key(),initial.key())}
-initial.reset();assert.equal(initial.pits[0].left,4*M.T);assert.equal(initial.pits[0].st,0);
-const natural=play(2,h(2,60).concat(h(6,20),h(2,240)));assert(natural.w.dead,'ordinary first jump lands in the relocated pit');assert(natural.positions.some(p=>p[0][0]>4*M.T));
-for(const t of [44,48,52,56,60,64])for(const x of [4.1,4.3,4.5,4.7]){const r=baitRoute(M.parseRows(L[2].rows),t,x);assert(r.w.won);assert.equal(r.w.pits[0].left,5*M.T);assert.equal(r.w.pits[0].right,7*M.T);const json=M.encodeSnapshot(r.w.map,r.inputs);assert(M.utf8len(json)<=2048);assert.equal(M.decodeSnapshot(json).version,8);}
-const knowledge=baitRoute(M.parseRows(L[2].rows)),at=knowledge.phases.find(x=>x.name==='land on safe ground').to;assert(play(2,knowledge.inputs.slice(0,at).concat(h(0,120),knowledge.inputs.slice(at))).w.won,'knowledge puzzle allows stopping after bait');
-assert(play(3,h(2,300)).w.dead,'walking without initial jump must die');
-for(const t of [16,20,24,28,32,36,40]){let r=play(3,h(2,t).concat(h(6,20),h(2,260)));assert(r.w.won,'one ordinary jump + keep running @'+t);assert.equal(r.jumps,1);}
-// Calibrated chase: interrupting for 0.2s loses the race, a brief control gap is tolerated.
-for(const at of [80,100,120,140])for(const pause of [0,4,8,10,12,16,20]){const seq=h(2,24).concat(h(6,20),h(2,at-44),h(0,pause),h(2,300));const r=play(3,seq);if(pause<=10)assert(r.w.won,'jitter tolerance '+at+'/'+pause);else assert(r.w.dead,'pause must fail '+at+'/'+pause);}
-const base=play(3,h(2,24).concat(h(6,20),h(2,56))).w;assert(base.grounded);const prev=base.pits[0].right;base.stepPits();assert.equal(base.pits[0].right-prev,84);assert.equal(84/M.SPEED,1.5);const settled=base.clone();for(let i=0;i<500;i++)settled.stepPits();assert.equal(settled.pits[0].right,9*M.T);assert.deepEqual(settled.solidSegments(9,6),[[9*M.T,10*M.T]]);
-const countdown=new M.World(M.parseRows(L[3].rows));countdown.x=2*M.T-M.PW;countdown.stepPits();assert.equal(countdown.pits[0].right,3*M.T);assert.equal(countdown.pits[0].delay,67);const waiting=countdown.clone();waiting.pits[0].delay--;assert.notEqual(waiting.key(),countdown.key());
-// Old v7 direction/speed and old v6 routes are preserved, never reinterpreted.
-for(const json of require('./v7_snapshot_fixtures.json')){const old=M.decodeSnapshot(json);assert.equal(old.version,7);assert.equal(M.simulate(old.map,old.inputs).result,'win');assert.equal(JSON.parse(M.encodeSnapshot(old.map,old.inputs)).v,7)}
-let oldMap=M.decodeSnapshot(require('./v7_snapshot_fixtures.json')[0]).map;let oldWorld=new M.World(oldMap);oldWorld.x=6*M.T-M.T/2-M.PW+1;oldWorld.step(0);assert.equal(oldWorld.pits[0].left,6*M.T-128,'legacy left shift');
-oldMap=M.decodeSnapshot(require('./v7_snapshot_fixtures.json')[1]).map;oldWorld=new M.World(oldMap);oldWorld.x=2*M.T-M.PW;oldWorld.stepPits();assert.equal(oldWorld.pits[0].right,3*M.T+24,'legacy slow expansion');
-const old=M.decodeSnapshot(require('./v6_snapshot_fixture.json'));assert.equal(old.version,6);assert.equal(M.simulate(old.map,old.inputs).result,'win');const bad=M.parseRows(L[2].rows);bad.rulesVersion=6;assert.equal(M.checkMap(bad),'格子类型非法');const unsupported=M.parseRows(L[2].rows);unsupported[2*12+5]=M.TILE.FALL;assert.equal(M.checkMap(unsupported),'动态坑上方暂不支持砸块');
-console.log('PASS: jump-triggered right shift, natural-jump failure/24 forgiving bait routes, chase 1.5x run speed, 0.2s pause fails/<=0.167s tolerated, exact collision, state/clone/reset, v6/v7 compatibility, <=2KB');
+const assert=require('assert'),M=require('../src/engine'),L=require('../src/levels'),R=require('./v15_routes');
+require('./dynamic_pit_v8_test');
+const fresh=i=>new M.World(M.parseRows(L[i].rows)),center=(w,x)=>{w.x=x*M.T-M.PW/2;};
+// A revealed opening is separate from stepping onto a collapse tile.
+let w=fresh(0);center(w,6.7);w.stepPits();assert.equal(w.pits[0].st,0);center(w,6.8);w.stepPits();assert.equal(w.pits[0].right,9*M.T);assert(w.x+M.PW<8*M.T);
+w=fresh(1);center(w,5);w.stepPits();assert.equal(w.pits[0].st,2);assert.equal(w.pits[1].st,0);center(w,8.2);w.stepPits();assert.equal(w.pits[0].st,2);assert.equal(w.pits[1].st,2);
+// One constant-width hole translates left as the player approaches (no jump trigger).
+w=fresh(2);center(w,4.7);w.stepPits();assert.equal(w.pits[0].st,0);center(w,4.8);w.stepPits();assert(w.pits[0].left<6*M.T);for(let t=0;t<30;t++)w.stepPits();assert.equal(w.pits[0].left,4*M.T);assert.equal(w.pits[0].right,6*M.T);
+// Same small hole stays small while stopped after crossing; further progress starts expansion.
+w=fresh(3);center(w,.4);w.stepPits();assert.equal(w.pits[0].right,2*M.T);center(w,3);for(let t=0;t<180;t++)w.stepPits();assert.equal(w.pits[0].right,2*M.T);center(w,3.5);w.stepPits();assert(w.pits[0].right>2*M.T);for(let t=0;t<200;t++)w.stepPits();assert.equal(w.pits[0].right,9*M.T);
+// Relay is one moving middle platform: BOTH openings change together; fixed 4T platform width.
+w=fresh(4);center(w,2);for(let t=0;t<100;t++)w.stepPits();assert.equal(w.pits[0].right,6*M.T);assert.equal(w.pits[1].left,10*M.T);center(w,8);for(let t=0;t<8;t++){w.stepPits();assert.equal(w.pits[1].left-w.pits[0].right,4*M.T);}assert.equal(w.pits[0].right,5*M.T);assert.equal(w.pits[1].left,9*M.T);assert.equal(w.pits[1].right,10*M.T);
+// Mid-motion clone, reset, independent state and deterministic continuation.
+for(let i=0;i<5;i++){w=fresh(i);const r=R.route(i);for(const a of r.inputs.slice(0,70))w.step(a);let c=w.clone();assert.equal(c.key(),w.key());for(const a of r.inputs.slice(70)){assert.equal(c.step(a),w.step(a));assert.equal(c.key(),w.key());}w.reset();assert.equal(w.key(),fresh(i).key());}
+// Old v8 recordings retain the former right-moving trap and physics, including resharing.
+for(const json of require('./v8_snapshot_fixtures.json')){const d=M.decodeSnapshot(json);assert.equal(d.version,8);assert.equal(M.simulate(d.map,d.inputs).result,'win');assert.equal(JSON.parse(M.encodeSnapshot(d.map,d.inputs)).v,8);}
+console.log('PASS v9: proximity reveals, left translation, progress-gated expansion, linked platform edges, clone/reset, v8 replay');

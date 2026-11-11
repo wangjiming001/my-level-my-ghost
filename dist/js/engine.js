@@ -11,12 +11,12 @@ var MLMG = (function () {
   var COLLAPSE_DELAY = 14;                     // ticks after first step
   var BLOCK_V0 = 24, BLOCK_G = 6, BLOCK_MAX = 200, BLOCK_WARN = 24;
   var MAX_FRAMES = 1200;                       // 20 s @ 60 ticks/s
-  var SNAP_VERSION = 8, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
+  var SNAP_VERSION = 9, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
   // tile codes: 0-7 same as v2, 8 = trampoline (v3, 4-bit maps)
-  var E = 0, GND = 1, SPK = 2, ST = 3, GL = 4, COL = 5, HID = 6, FALL = 7, TRM = 8, SHIFT = 9, CHASE = 10;
+  var E = 0, GND = 1, SPK = 2, ST = 3, GL = 4, COL = 5, HID = 6, FALL = 7, TRM = 8, SHIFT = 9, CHASE = 10, OPEN = 11, RELAY = 12;
   var BOUNCE_V = 300; // tuned so a no-hold bounce rises ~3 tiles
   var IN_L = 1, IN_R = 2, IN_J = 4;
-  var CH = { '.': E, '#': GND, '^': SPK, 'S': ST, 'G': GL, 'c': COL, 'h': HID, 'f': FALL, 't': TRM, 'm': SHIFT, 'e': CHASE };
+  var CH = { '.': E, '#': GND, '^': SPK, 'S': ST, 'G': GL, 'c': COL, 'h': HID, 'f': FALL, 't': TRM, 'm': SHIFT, 'e': CHASE, 'o': OPEN, 'p': RELAY };
 
   function parseRows(rows) {
     var m = new Uint8Array(COLS * ROWS);
@@ -26,18 +26,20 @@ var MLMG = (function () {
     }
     return m;
   }
-  function isTrap(t) { return t === COL || t === HID || t === FALL || t === SHIFT || t === CHASE; }
+  function isTrap(t) { return t === COL || t === HID || t === FALL || t === SHIFT || t === CHASE || t === OPEN || t === RELAY; }
   // structural check shared by editor and snapshot loader
   function checkMap(m) {
     if (!m || m.length !== COLS * ROWS) return '地图尺寸不对';
     var s = 0, g = 0, traps = 0, pits = 0;
     for (var i = 0; i < m.length; i++) {
-      var t = m[i]; if (t > ((m.rulesVersion || SNAP_VERSION) >= 7 ? CHASE : TRM) || t < 0 || (t | 0) !== t) return '格子类型非法';
-      if (t === SHIFT || t === CHASE) {
-        pits++; var pc = i % COLS, pr = (i / COLS) | 0;
-        var rightShift = (m.rulesVersion || SNAP_VERSION) >= 8;
+      var t = m[i]; if (t > ((m.rulesVersion || SNAP_VERSION) >= 9 ? RELAY : (m.rulesVersion || SNAP_VERSION) >= 7 ? CHASE : TRM) || t < 0 || (t | 0) !== t) return '格子类型非法';
+      if (t === SHIFT || t === CHASE || t === OPEN || t === RELAY) {
+        if (t !== OPEN) pits++; var pc = i % COLS, pr = (i / COLS) | 0;
+        var version = m.rulesVersion || SNAP_VERSION, rightShift = version === 8;
+        if (t === OPEN) { traps++; if (pr < 1 || pr >= ROWS - 1 || pc < 1 || pc >= COLS - 1 || m[(pr + 1) * COLS + pc] !== GND) return '开坑位置不合法'; continue; }
+        if (t === RELAY && pc !== 0) return '联动地块必须从左边开始';
         if (pr < 1 || pr >= ROWS - 1 || (t === SHIFT ? (rightShift ? pc > COLS - 4 : pc < 2 || pc > COLS - 2) : pc > COLS - 4)) return '动态坑位置不合法';
-        var lo = t === SHIFT && !rightShift ? pc - 2 : pc, hi = t === SHIFT ? pc + (rightShift ? 3 : 2) : Math.min(pc + 7, COLS - 1);
+        var lo = t === SHIFT && !rightShift ? pc - 2 : pc, hi = t === RELAY ? 10 : t === SHIFT ? pc + (rightShift ? 3 : 2) : version >= 9 ? COLS - 2 : Math.min(pc + 7, COLS - 1);
         for (var py = pr; py < ROWS; py++) for (var px = lo; px < hi; px++) if (py * COLS + px !== i && m[py * COLS + px] !== GND) return '动态坑范围需要完整地面';
         for (var ay = 0; ay < pr; ay++) for (var ax = lo; ax < hi; ax++) if (m[ay * COLS + ax] === FALL) return '动态坑上方暂不支持砸块';
       }
@@ -61,14 +63,15 @@ var MLMG = (function () {
     for (i = 0; i < m.length; i++) {
       if (m[i] === ST) { var c = i % COLS, r = (i / COLS) | 0;
         this.x = c * T + ((T - PW) >> 1); this.y = r * T + T - PH; }
-      if (m[i] === SHIFT || m[i] === CHASE) { var pc = i % COLS; this.pits.push({ cell: i, kind: m[i], row: (i / COLS) | 0, left: pc * T, right: (pc + (m[i] === SHIFT ? 2 : 0)) * T, st: 0, delay: 0 }); }
+      if (m[i] === SHIFT || m[i] === CHASE || m[i] === OPEN || m[i] === RELAY) { var pc = i % COLS; this.pits.push({ cell: i, kind: m[i], row: (i / COLS) | 0, left: pc * T, right: (pc + (m[i] === SHIFT ? 2 : 0)) * T, st: 0, delay: 0 }); }
+      if (m[i] === RELAY) this.pits.push({ cell: i, kind: RELAY, row: (i / COLS) | 0, left: 10 * T, right: 10 * T, st: 0, delay: 0, front: true });
       if (m[i] === FALL) this.blocks.push({ c: i % COLS, y: ((i / COLS) | 0) * T, vy: 0, st: 0, warn: 0, activeHit: false, hitTop: 0, hitBottom: 0 }); // st 0 idle,1 falling,2 landed,3 gone,4 warning
     }
   };
   World.prototype.solid = function (c, r, skip) {
     if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return false;
     var i = r * COLS + c, t = this.map[i];
-    if (t === GND || t === TRM || t === SHIFT || t === CHASE) return true;
+    if (t === GND || t === TRM || t === SHIFT || t === CHASE || t === OPEN || t === RELAY) return true;
     if (t === COL && this.collapse[i] !== -1) return true;
     for (var k = 0; k < this.blocks.length; k++) {
       var b = this.blocks[k];
@@ -101,6 +104,32 @@ var MLMG = (function () {
   };
   World.prototype.stepPits = function () {
     for (var k = 0; k < this.pits.length; k++) { var p = this.pits[k], start = (p.cell % COLS) * T;
+      if (this.rulesVersion >= 9) {
+        if (p.kind === OPEN) {
+          // First reveal is early; a later opening exploits the first jump's landing/continued run.
+          var earlier = this.pits.some(function (q) { return q.kind === OPEN && q.cell < p.cell; });
+          var revealAt = start - (earlier ? 1.8 * T : 1.25 * T);
+          if (!earlier && this.pits.filter(function (q) { return q.kind === OPEN; }).length > 1) revealAt = start - 2 * T;
+          if (!p.st && this.x + PW / 2 >= revealAt) { p.st = 2; p.right = start + T; this.ev |= 128; }
+        } else if (p.kind === SHIFT) {
+          if (!p.st && this.x + PW / 2 >= start - 1.2 * T) { p.st = 1; this.ev |= 128; }
+          if (p.st === 1) { p.left = Math.max(start - 2 * T, p.left - 128); p.right = p.left + 2 * T; if (p.left === start - 2 * T) p.st = 2; }
+        } else if (p.kind === CHASE) {
+          if (!p.st && this.x + PW / 2 >= start - 0.7 * T) { p.st = 1; p.right = start + T; this.ev |= 128; }
+          if (p.st === 1 && this.x + PW / 2 >= start + 2.5 * T) { p.st = 2; this.ev |= 128; }
+          if (p.st === 2) { p.right = Math.min(9 * T, p.right + 64); if (p.right === 9 * T) p.st = 3; }
+        } else if (p.kind === RELAY && !p.front) {
+          if (!p.st && this.x + PW / 2 >= 2 * T) { p.st = 1; this.ev |= 128; }
+          if (p.st === 1) { p.right = Math.min(6 * T, p.right + 72); if (p.right === 6 * T) p.st = 2; }
+          if (p.st === 2 && this.x + PW / 2 >= 8 * T) { p.st = 3; this.ev |= 128; }
+          if (p.st === 3) {
+            p.right = Math.max(5 * T, p.right - 128);
+            var front = this.pits[k + 1]; front.left = p.right + 4 * T; front.st = 1;
+            if (p.right === 5 * T) { p.st = 4; front.st = 2; }
+          }
+        }
+        continue;
+      }
       var modern = this.rulesVersion >= 8;
       var trigger = p.kind === SHIFT && modern
         ? (this.ev & 1) && this.x + PW > start - T && this.x < start + 2 * T
@@ -203,7 +232,8 @@ var MLMG = (function () {
     this.tick++;
     // A closing edge cannot rescue a player who already fell below the surface.
     for (k = 0; k < this.pits.length; k++) { var pit = this.pits[k];
-      var closedOverPlayer = this.rulesVersion >= 8 ? this.x < pit.left && this.x + PW > (pit.cell % COLS) * T : this.x + PW > pit.right && this.x < (pit.cell % COLS + 2) * T;
+      var closedOverPlayer = this.rulesVersion === 8 ? this.x < pit.left && this.x + PW > (pit.cell % COLS) * T : this.x + PW > pit.right && this.x < (pit.cell % COLS + 2) * T;
+      if (this.rulesVersion >= 9 && pit.kind === RELAY && !pit.front && pit.st >= 3 && this.y + PH > pit.row * T + 128 && this.x + PW > pit.right && this.x < 6 * T) { this.dead = true; this.cause = 'collapse'; this.killer = pit.cell; return 1; }
       if (pit.kind === SHIFT && pit.st > 0 && this.y + PH > pit.row * T + 128 && closedOverPlayer) { this.dead = true; this.cause = 'collapse'; this.killer = pit.cell; return 1; }
     }
     // death
@@ -229,7 +259,7 @@ var MLMG = (function () {
     w.map = this.map; w.rulesVersion = this.rulesVersion; w.tick = this.tick; w.cause = this.cause; w.killer = this.killer; w.lastCol = this.lastCol; w.ev = this.ev; w.face = this.face; w.coyote = this.coyote; w.jbuf = this.jbuf; w.dead = this.dead; w.won = this.won; w.grounded = this.grounded;
     w.vx = this.vx; w.vy = this.vy; w.x = this.x; w.y = this.y; w.prevJ = this.prevJ; w.jumpHeld = this.jumpHeld; w.sprung = this.sprung;
     w.collapse = new Int16Array(this.collapse); w.hidden = new Uint8Array(this.hidden);
-    w.pits = this.pits.map(function (p) { return { cell: p.cell, kind: p.kind, row: p.row, left: p.left, right: p.right, st: p.st, delay: p.delay }; });
+    w.pits = this.pits.map(function (p) { return { cell: p.cell, kind: p.kind, row: p.row, left: p.left, right: p.right, st: p.st, delay: p.delay, front: p.front }; });
     w.blocks = this.blocks.map(function (b) { return { c: b.c, y: b.y, vy: b.vy, st: b.st, warn: b.warn, activeHit: b.activeHit, hitTop: b.hitTop, hitBottom: b.hitBottom }; });
     return w;
   };
@@ -346,7 +376,7 @@ var MLMG = (function () {
     var keys = Object.keys(o).sort().join(',');
     if (keys !== 'c,f,g,m,v') throw new Error('快照字段不对');
     if (o.v === 1) throw new Error('这是第一版的快照，物理手感已更新，旧关卡影子无法回放');
-    if (o.v !== 2 && o.v !== 3 && o.v !== 4 && o.v !== 5 && o.v !== 6 && o.v !== 7 && o.v !== 8) throw new Error('快照版本不支持');
+    if (o.v !== 2 && o.v !== 3 && o.v !== 4 && o.v !== 5 && o.v !== 6 && o.v !== 7 && o.v !== 8 && o.v !== 9) throw new Error('快照版本不支持');
     if (typeof o.m !== 'string') throw new Error('地图编码长度不对');
     if (o.v === 2 && o.m.length !== 48) throw new Error('地图编码长度不对');
     if (o.v >= 3 && o.m.length !== 64) throw new Error('地图编码长度不对');
@@ -373,7 +403,7 @@ var MLMG = (function () {
 
   return {
     VERSION: SNAP_VERSION, SPEED: SPEED, JUMPV: JUMPV, BOUNCE_V: BOUNCE_V, COLS: COLS, ROWS: ROWS, T: T, PW: PW, PH: PH, MAX_FRAMES: MAX_FRAMES, SNAP_LIMIT: SNAP_LIMIT, MAX_TRAPS: MAX_TRAPS, BLOCK_WARN: BLOCK_WARN,
-    TILE: { E: E, GND: GND, SPK: SPK, ST: ST, GL: GL, COL: COL, HID: HID, FALL: FALL, TRM: TRM, SHIFT: SHIFT, CHASE: CHASE }, IN: { L: IN_L, R: IN_R, J: IN_J },
+    TILE: { E: E, GND: GND, SPK: SPK, ST: ST, GL: GL, COL: COL, HID: HID, FALL: FALL, TRM: TRM, SHIFT: SHIFT, CHASE: CHASE, OPEN: OPEN, RELAY: RELAY }, IN: { L: IN_L, R: IN_R, J: IN_J },
     World: World, parseRows: parseRows, checkMap: checkMap, isTrap: isTrap, simulate: simulate,
     inputsToEvents: inputsToEvents, eventsToInputs: eventsToInputs, packMap: packMap, unpackMap: unpackMap, packMap3: packMap3, unpackMap3: unpackMap3, packMapBits: packMapBits, unpackMapBits: unpackMapBits,
     packEvents: packEvents, b64enc: b64enc, b64dec: b64dec, encodeSnapshot: encodeSnapshot, decodeSnapshot: decodeSnapshot,
