@@ -9,10 +9,8 @@ for(const t of [104,112,120,128,136,144])win(0,hold(2,t).concat(hold(6,20),hold(
 // A second trap after the first: early and late approaches both work.
 assert.equal(play(1,hold(2,40).concat(hold(6,20),hold(2,240))).cause,'collapse');
 for(const t of [32,40,48,56])for(const total of [112,120,128])win(1,hold(2,t).concat(hold(6,20),hold(2,total-t-20),hold(6,20),hold(2,240)));
-// Visible first gap does not tell the whole story: following ordinary ground collapses.
-assert.equal(play(2,hold(2,28).concat(hold(6,20),hold(2,240))).cause,'collapse');
-for(const t of [20,28,36])for(const total of [76,84,92])win(2,hold(2,t).concat(hold(6,20),hold(2,total-t-20),hold(6,20),hold(2,240)));
-// The surprise moves to the beginning; one ordinary jump is enough.
+// Actual moving/expanding terrain, not fixed-cell substitutes.
+for(const t of [60,68,76,84,92,100])win(2,hold(2,t).concat(hold(6,20),hold(2,240)));
 for(const t of [16,20,24,28,32,36,40])win(3,hold(2,t).concat(hold(6,20),hold(2,240)));
 // Keep the approved fifth-level surprise; remove the precision spike added in v11.
 assert(!L[4].rows.join('').includes('^'),'no extra visible spike');

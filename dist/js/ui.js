@@ -60,7 +60,7 @@
   var goneAt = {}, popAt = {};
   function blockCell(map, k) { var n = 0; for (var i = 0; i < map.length; i++) if (map[i] === TL.FALL) { if (n === k) return i; n++; } return -1; }
   // view: 'play' (traps disguised) | 'edit' (traps marked) | 'card' (disguised except reveal{cell:true})
-  function solidLook(map, c, r) { if (c < 0 || c >= COLS) return true; if (r < 0 || r >= ROWS) return false; var t = map[r * COLS + c]; return t === TL.GND || t === TL.COL || t === TL.FALL || t === TL.TRM; }
+  function solidLook(map, c, r) { if (c < 0 || c >= COLS) return true; if (r < 0 || r >= ROWS) return false; var t = map[r * COLS + c]; return t === TL.GND || t === TL.COL || t === TL.FALL || t === TL.TRM || t === TL.SHIFT || t === TL.CHASE; }
   function variant(map, c, r) { if (solidLook(map, c, r - 1)) return 'D'; var l = solidLook(map, c - 1, r), rr = solidLook(map, c + 1, r), below = solidLook(map, c, r + 1);
     if (!l && !below) return 'L'; if (!rr && !below) return 'R'; return 'M'; }
   var crumbs = [];
@@ -77,7 +77,7 @@
     for (i = 0; i < map.length; i++) {
       tt = map[i]; c = i % COLS; r = (i / COLS) | 0; x = c * s; y = r * s;
       var rv = reveal && reveal[i], v = variant(map, c, r);
-      if (tt === TL.GND) ART3.tile(g, 'g', v, x, y, s);
+      if (tt === TL.GND || tt === TL.SHIFT || tt === TL.CHASE) ART3.tile(g, 'g', v, x, y, s);
       else if (tt === TL.SPK) ART3.spike(g, x, y, s);
       else if (tt === TL.ST) { ART3.start(g, x, y, s); if (view === 'edit') ART3.bear(g, x + s * 0.19, y + s * 0.22, s * 0.62, s * 0.78, { anim: 'idle', alpha: 0.6 }); }
       else if (tt === TL.GL) ART3.goal(g, x, y, s, t);
@@ -93,6 +93,13 @@
       } else if (tt === TL.TRM) {
         ART3.tramp(g, x, y, s, t, !!(world && world.sprung && world.grounded === false));
       }
+    }
+    // Render the same exact moving intervals used by terrain collision.
+    var pits = world ? world.pits : null;
+    if (!pits) { pits = []; for (var pi = 0; pi < map.length; pi++) if (map[pi] === TL.SHIFT || map[pi] === TL.CHASE) { pits = new M.World(map).pits; break; } }
+    for (var pk = 0; pk < pits.length; pk++) { var pit = pits[pk];
+      if (pit.right > pit.left) { g.save(); g.beginPath(); g.rect(pit.left * sc, pit.row * s, (pit.right - pit.left) * sc, (ROWS - pit.row) * s); g.clip(); ART3.bg(g, COLS * s, ROWS * s, t); g.restore(); }
+      if (view === 'edit') { g.fillStyle = '#ff7026'; g.font = 'bold ' + Math.round(s * 0.45) + 'px sans-serif'; g.fillText(pit.kind === TL.SHIFT ? '←' : '→→', (pit.cell % COLS) * s, (pit.row + 0.7) * s); }
     }
     if (world) for (var b = 0; b < world.blocks.length; b++) { var bl = world.blocks[b]; if (bl.st !== 3) { var bc = blockCell(map, b), bx = bl.c * s, byy = bl.y * sc;
       if (bl.st === 0 && view === 'play' && !(reveal && reveal[bc])) ART3.tile(g, 'g', variant(map, bl.c, (bc / COLS) | 0), bx, byy, s);
@@ -178,6 +185,7 @@
   var game = null;
   function trapHint(map) { var h = [];
     for (var i = 0; i < map.length; i++) { if (map[i] === TL.COL && h.indexOf('有的地板踩上去会塌') < 0) h.push('有的地板踩上去会塌');
+      if (map[i] === TL.SHIFT) h.push('坑会向左移动，提前跳'); if (map[i] === TL.CHASE) h.push('先跳，再继续跑，别停在扩大的坑前');
       if (map[i] === TL.HID && h.indexOf('平地上有藏起来的刺') < 0) h.push('平地上有藏起来的刺'); if (map[i] === TL.FALL && h.indexOf('有方块会从上面掉下来') < 0) h.push('有方块会从上面掉下来'); }
     return h.length ? h.join('；') + '。' : '这关没有恶搞机关。'; }
   function startPlay(opts) {
@@ -199,7 +207,7 @@
     else {
       g.rec.push(inp);
       var ev = w.step(inp);
-      if (w.ev & 1) { SFX.jump(); g.squash = -6; } if (w.ev & 2) { SFX.land(); g.squash = 6; } if (w.ev & 32) { SFX.bounce(); g.squash = -8; } if (w.ev & 92) SFX.click();
+      if (w.ev & 1) { SFX.jump(); g.squash = -6; } if (w.ev & 2) { SFX.land(); g.squash = 6; } if (w.ev & 32) { SFX.bounce(); g.squash = -8; } if (w.ev & 220) SFX.click();
       if (ev === 1) { g.deaths++; onDeath(g); }
       else if (ev === 2) { finish(); return; }
       else if (g.mode === 'record' && w.tick >= M.MAX_FRAMES) { toast('超过 20 秒，重来'); respawn(g); }
@@ -321,7 +329,7 @@
     var share = '《我的关，我的影子》' + (g.mode === 'demo' ? '示范关「' + g.title + '」' : '') + ' ' + (skulls || '✨') + '🏁 ' + fmt(my).replace(' ', '') + (vs ? '（' + vs + '）' : '');
     $('rShare').textContent = share; $('rShare').setAttribute('data-t', share);
     $('rNext').style.display = (g.mode === 'demo' && g.levelIdx < LEVELS.length - 1) ? '' : 'none'; $('rMsg').textContent = '';
-    if (g.mode === 'demo') { var best = +store('best_rules_v6_layout_v12_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v6_layout_v12_' + g.levelIdx, String(my)); }
+    if (g.mode === 'demo') { var best = +store('best_rules_v7_layout_v13_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v7_layout_v13_' + g.levelIdx, String(my)); }
     show('sResult');
   }
 
@@ -427,7 +435,7 @@
     var s = store('editor_v4');
     if (s) {
       var a = s.split(',').map(Number);
-      if (a.length === COLS * ROWS && a.every(function (v) { return v >= 0 && v <= 8 && (v | 0) === v; })) return new Uint8Array(a);
+      if (a.length === COLS * ROWS && a.every(function (v) { return v >= 0 && v <= 10 && (v | 0) === v; })) return new Uint8Array(a);
     }
     return defaultMap();
   }
@@ -741,7 +749,7 @@
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
     startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: (i + 1) + '. ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
-    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v6_layout_v12_' + i) || 0;
+    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v7_layout_v13_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';
       b.onclick = function () { playDemo(i); }; list.appendChild(b); }); }
   $('rAgain').onclick = function () { var g = game; if (!g) return show('sMenu'); if (g.mode === 'demo') playDemo(g.levelIdx); else startChallenge(g.snapshot, g.ghostLabel); };
