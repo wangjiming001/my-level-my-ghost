@@ -1,5 +1,7 @@
 # 机关节奏：原作画面测量与本项目 v8 标定
 
+**用途限制：** 此文是v14追赶机制的工程标定，不是整体设计目标。用户最新试玩指出“像挑战、缺少意想不到”，内容纠偏见 [SURPRISE_DESIGN_AUDIT.md](SURPRISE_DESIGN_AUDIT.md)。速度比和短停阈值不能作为趣味性验收。
+
 日期：2026-11-11。原作来源与正常运行录像范围见 [LEVEL_DEVIL_FIRST_FIVE_STUDY.md](LEVEL_DEVIL_FIRST_FIVE_STUDY.md)。本次重新分析已保存的正常运行画面，没有将虚拟时钟实验当作实测数据。
 
 ## 原作重新测量
