@@ -561,23 +561,33 @@
   }
   function setNoteBusy(busy) {
     postingNote = busy;
-    var b = $('mNote'); if (b) b.disabled = busy;
+    ['mNote', 'rNote'].forEach(function (id) { var b = $(id); if (b) b.disabled = busy; });
   }
-  // 只从首页调用。卡片可带最近通关的关卡缩略图，但 postNote 载荷绝不带快照。
-  function publishNote() {
+  // 首页分享游戏，结算页分享本次成绩；postNote 不携带关卡快照。
+  function publishNote(source) {
     if (postingNote) return;
-    var el = $('mMsg');
+    var result = source === 'result', el = $(result ? 'rMsg' : 'mMsg');
     if (!window.XHS || typeof XHS.canPostNote !== 'function' || !XHS.canPostNote()) {
       setNoteMsg(el, false, '请在小红书 App 里打开小工具');
       return;
     }
     setNoteBusy(true);
     setNoteMsg(el, true, '正在生成分享图…');
-    var promo = loadPromoMap(), dataUrl = '';
-    try { dataUrl = drawShareNoteCard({ map: promo && promo.map, reveal: promo && promo.reveal, line: NOTE.SLOGAN, hint: NOTE.HINT }); }
+    var dataUrl = '', title = NOTE.TITLE, content = NOTE.CONTENT;
+    try {
+      if (result) {
+        dataUrl = $('rCard').src;
+        if (dataUrl.indexOf('data:image/') !== 0) dataUrl = '';
+        title = '我的关，我的影子｜通关成绩';
+        content = $('rShare').getAttribute('data-t') + '\n\n打开笔记里的小工具，一起来挑战！\n\n#我的关我的影子';
+      } else {
+        var promo = loadPromoMap();
+        dataUrl = drawShareNoteCard({ map: promo && promo.map, reveal: promo && promo.reveal, line: NOTE.SLOGAN, hint: NOTE.HINT });
+      }
+    }
     catch (e) { dataUrl = ''; }
     if (!dataUrl) { setNoteBusy(false); setNoteMsg(el, false, '分享图生成失败'); return; }
-    XHS.postNote({ title: NOTE.TITLE, content: NOTE.CONTENT, dataUrl: dataUrl, pageType: 'photo_publish' }).then(function () {
+    XHS.postNote({ title: title, content: content, dataUrl: dataUrl, pageType: 'photo_publish' }).then(function () {
       setNoteBusy(false);
       setNoteMsg(el, true, '已打开发布笔记页。唤起成功不代表笔记已过审。');
     }).catch(function (err) {
@@ -618,7 +628,7 @@
   $('xBack').onclick = function () { openEditor(); };
   // 在线文档 3.9：评论媒体须是 writeTempFile 句柄；routed 不代表已发布。需从挂着本工具的笔记里打开。
   $('xXhs').onclick = function () { postLevelComment(); };
-  // 在线文档 3.3 / 3.5：postNote 只从首页唤起，只推广游戏，不携带关卡快照。
+  // 在线文档 3.3 / 3.5：postNote 携带图文，不携带关卡快照。
   if ($('mNote')) $('mNote').onclick = function () { publishNote(); };
 
   // ---------------- import / challenge ----------------
@@ -654,7 +664,7 @@
   $('rNext').onclick = function () { if (game && game.mode === 'demo') playDemo(game.levelIdx + 1); };
   $('rMake').onclick = function () { editor.map = defaultMap(); editor.rec = null; openEditor(); };
   $('rMenu').onclick = function () { game = null; show('sMenu'); };
-  $('rCopy').onclick = function () { copyText($('rShare').getAttribute('data-t'), $('rMsg')); };
+  $('rNote').onclick = function () { publishNote('result'); };
 
   function drawLogo() { var g = $('logo').getContext('2d'); g.clearRect(0, 0, 240, 120); for (var i = 0; i < 8; i++) ART3.tile(g, 'g', i === 0 ? 'L' : i === 7 ? 'R' : 'M', i * 30, 90, 30);
     ART3.bear(g, 118, 44, 36, 46, { anim: 'run', f: 4, alpha: 0.5, tint: 'rgba(150,170,255,0.55)' }); ART3.bear(g, 66, 40, 36, 50, { anim: 'dead', f: 3, rot: -0.3 }); ART3.emote(g, 'swirl', 84, 40, 26); ART3.goal(g, 190, 52, 40, 0); ART3.spike(g, 152, 60, 30); }

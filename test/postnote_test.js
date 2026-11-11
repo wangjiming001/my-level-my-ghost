@@ -19,7 +19,7 @@ function loadXHS(miniTool) {
 var TITLE = '造关坑人，留影子等人翻车';
 var CONTENT = '自己出坑关，自己先通关，把影子留给下一个人追。\n\n打开这篇笔记里的小工具就能玩：先挑战示范关，或自己造一关。想让别人来跑你的关，请从挂着本工具的笔记里打开，再把关卡发到评论。\n\n#我的关我的影子';
 
-console.log('== 4. 页面结构：postNote 只在首页 ==');
+console.log('== 4. 页面结构：postNote 支持首页与结算页 ==');
 (function () {
   var html = fs.readFileSync(path.resolve(__dirname, '../src/template_v4.html'), 'utf8');
   var ui = fs.readFileSync(path.resolve(__dirname, '../src/ui_v3.js'), 'utf8');
@@ -28,15 +28,15 @@ console.log('== 4. 页面结构：postNote 只在首页 ==');
   var exportSlice = html.slice(html.indexOf('id="sExport"'), html.indexOf('id="sImport"'));
   var resultSlice = html.slice(html.indexOf('id="sResult"'));
   ok(menuSlice.indexOf('id="mNote"') >= 0 && menuSlice.indexOf('分享这个游戏到笔记') >= 0, 'home has 分享这个游戏到笔记');
-  ok(exportSlice.indexOf('id="xNote"') < 0 && resultSlice.indexOf('id="rNote"') < 0 && resultSlice.indexOf('id="rXhs"') < 0, 'export/result have no note button');
+  ok(exportSlice.indexOf('id="xNote"') < 0 && resultSlice.indexOf('id="rNote"') >= 0 && resultSlice.indexOf('id="rXhs"') < 0, 'export keeps comments and result has note button');
   ok(exportSlice.indexOf('id="xXhs"') >= 0 && exportSlice.indexOf('把关卡发到评论') >= 0, 'export primary is 把关卡发到评论');
   ok(exportSlice.indexOf('需从挂着本工具的笔记里打开') >= 0, 'export has host-note hint');
-  ok(resultSlice.indexOf('我也造一关') >= 0 && resultSlice.indexOf('id="rCopy"') >= 0, 'result keeps 复制成绩 and 我也造一关');
+  ok(resultSlice.indexOf('我也造一关') >= 0 && resultSlice.indexOf('id="rNote"') >= 0 && resultSlice.indexOf('发布笔记') >= 0 && resultSlice.indexOf('id="rCopy"') < 0, 'result offers 发布笔记 and 我也造一关');
   ok(exportSlice.indexOf('class="pri" id="xXhs"') >= 0 || /id="xXhs"[^>]*class="[^"]*pri/.test(exportSlice) || /class="pri" id="xXhs"/.test(exportSlice), 'comment button is primary');
   ok(exportSlice.indexOf('class="pri" id="xCopy"') < 0, 'copy is not primary');
   ok(ui.indexOf("publishNote('export')") < 0 && ui.indexOf('publishNote("export")') < 0, 'ui does not call publishNote from export');
-  ok(ui.indexOf("publishNote('result')") < 0 && ui.indexOf('publishNote("result")') < 0, 'ui does not call publishNote from result');
-  ok(/\$\('mNote'\)\)\s*\$\('mNote'\)\.onclick\s*=\s*function\s*\(\)\s*\{\s*publishNote\(\)/.test(ui) || ui.indexOf("$('mNote').onclick = function () { publishNote(); }") >= 0, 'publishNote bound only on home mNote');
+  ok(ui.indexOf("publishNote('result')") >= 0, 'ui publishes note from result');
+  ok(/\$\('mNote'\)\)\s*\$\('mNote'\)\.onclick\s*=\s*function\s*\(\)\s*\{\s*publishNote\(\)/.test(ui) || ui.indexOf("$('mNote').onclick = function () { publishNote(); }") >= 0, 'home note binding preserved');
   ok(ui.indexOf('miniToolSnapshotInfo') < 0 || ui.indexOf('XHS.postNote') >= 0, 'postNote path exists');
   ok(ui.indexOf('NOTE.CONTENT') >= 0 && ui.indexOf('snapshot: exportJson') < 0 && ui.indexOf('snapshot: g && g.snapshot') < 0, 'postNote helper does not pass snapshot');
 })();
