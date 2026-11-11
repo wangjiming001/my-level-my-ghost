@@ -66,7 +66,12 @@
   var crumbs = [];
   // view: 'play' (traps disguised) | 'edit' (traps marked) | 'card' (disguised except reveal{cell:true})
   function drawMap(g, map, sc, world, view, t, reveal) {
-    var s = T * sc, i, c, r, x, y, tt;
+    var s = T * sc, i, c, r, x, y, tt, ceilingRows = 0;
+    // Full solid rows at the top form a ceiling, using earth rather than an upward grass surface.
+    for (var crw = 0; crw < ROWS; crw++) {
+      var full = true; for (var ccw = 0; ccw < COLS; ccw++) if (map[crw * COLS + ccw] !== TL.GND) full = false;
+      if (!full) break; ceilingRows++;
+    }
     ART3.bg(g, COLS * s, ROWS * s, t);
     // Conceal the empty shaft below an intact false floor during play/cards.
     // It is decorative earth only; disappears with its supporting trap.
@@ -77,7 +82,7 @@
     for (i = 0; i < map.length; i++) {
       tt = map[i]; c = i % COLS; r = (i / COLS) | 0; x = c * s; y = r * s;
       var rv = reveal && reveal[i], v = variant(map, c, r);
-      if (tt === TL.GND || tt === TL.SHIFT || tt === TL.CHASE || tt === TL.OPEN || tt === TL.RELAY) ART3.tile(g, 'g', v, x, y, s);
+      if (tt === TL.GND || tt === TL.SHIFT || tt === TL.CHASE || tt === TL.OPEN || tt === TL.RELAY) ART3.tile(g, 'g', r < ceilingRows ? 'D' : v, x, y, s);
       else if (tt === TL.SPK) ART3.spike(g, x, y, s);
       else if (tt === TL.ST) { ART3.start(g, x, y, s); if (view === 'edit') ART3.bear(g, x + s * 0.19, y + s * 0.22, s * 0.62, s * 0.78, { anim: 'idle', alpha: 0.6 }); }
       else if (tt === TL.GL) ART3.goal(g, x, y, s, t);
@@ -329,7 +334,7 @@
     var share = '《我的关，我的影子》' + (g.mode === 'demo' ? '示范关「' + g.title + '」' : '') + ' ' + (skulls || '✨') + '🏁 ' + fmt(my).replace(' ', '') + (vs ? '（' + vs + '）' : '');
     $('rShare').textContent = share; $('rShare').setAttribute('data-t', share);
     $('rNext').style.display = (g.mode === 'demo' && g.levelIdx < LEVELS.length - 1) ? '' : 'none'; $('rMsg').textContent = '';
-    if (g.mode === 'demo') { var best = +store('best_rules_v9_layout_v15_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v9_layout_v15_' + g.levelIdx, String(my)); }
+    if (g.mode === 'demo') { var best = +store('best_rules_v10_layout_v16_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v10_layout_v16_' + g.levelIdx, String(my)); }
     show('sResult');
   }
 
@@ -747,9 +752,9 @@
   $('pBack').onclick = function () { var g = game; game = null; clearInput();
     if (editor.on) { editor.on = false; show('sMenu'); } else if (g && g.mode === 'record') openEditor(); else if (g && g.mode === 'demo') { buildLevels(); show('sLevels'); } else show('sMenu'); };
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
-    startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: 'v15 · ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
+    startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: 'v16 · ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
-    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v9_layout_v15_' + i) || 0;
+    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v10_layout_v16_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';
       b.onclick = function () { playDemo(i); }; list.appendChild(b); }); }
   $('rAgain').onclick = function () { var g = game; if (!g) return show('sMenu'); if (g.mode === 'demo') playDemo(g.levelIdx); else startChallenge(g.snapshot, g.ghostLabel); };

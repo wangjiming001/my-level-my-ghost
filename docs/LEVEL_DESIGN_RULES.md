@@ -1,5 +1,7 @@
 # 《我的关，我的影子》机关与关卡创作规则
 
+**v16当前预览：** 空间、速度与阈值已更新到规则v10，详见[V16_PREVIEW.md](V16_PREVIEW.md)。
+
 **当前预览更新：** v15已使用规则v9；当前布局和参数见[V15_PREVIEW.md](V15_PREVIEW.md)。下文v8右移/68tick延时为历史版本，不能覆盖v15。
 
 **内容方向更新：** 当前优先按 [SURPRISE_DESIGN_AUDIT.md](SURPRISE_DESIGN_AUDIT.md) 设计和验收骗局。以下速度、失败对照和物理规则用于实现可靠性，不足以证明意外或幽默。

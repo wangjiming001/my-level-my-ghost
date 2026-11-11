@@ -11,7 +11,7 @@ var MLMG = (function () {
   var COLLAPSE_DELAY = 14;                     // ticks after first step
   var BLOCK_V0 = 24, BLOCK_G = 6, BLOCK_MAX = 200, BLOCK_WARN = 24;
   var MAX_FRAMES = 1200;                       // 20 s @ 60 ticks/s
-  var SNAP_VERSION = 9, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
+  var SNAP_VERSION = 10, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
   // tile codes: 0-7 same as v2, 8 = trampoline (v3, 4-bit maps)
   var E = 0, GND = 1, SPK = 2, ST = 3, GL = 4, COL = 5, HID = 6, FALL = 7, TRM = 8, SHIFT = 9, CHASE = 10, OPEN = 11, RELAY = 12;
   var BOUNCE_V = 300; // tuned so a no-hold bounce rises ~3 tiles
@@ -108,20 +108,20 @@ var MLMG = (function () {
         if (p.kind === OPEN) {
           // First reveal is early; a later opening exploits the first jump's landing/continued run.
           var earlier = this.pits.some(function (q) { return q.kind === OPEN && q.cell < p.cell; });
-          var revealAt = start - (earlier ? 1.8 * T : 1.25 * T);
-          if (!earlier && this.pits.filter(function (q) { return q.kind === OPEN; }).length > 1) revealAt = start - 2 * T;
+          var revealAt = start - (this.rulesVersion >= 10 ? (earlier ? 0.85 * T : 0.8 * T) : (earlier ? 1.8 * T : 1.25 * T));
+          if (!earlier && this.pits.filter(function (q) { return q.kind === OPEN; }).length > 1) revealAt = start - (this.rulesVersion >= 10 ? 1.25 * T : 2 * T);
           if (!p.st && this.x + PW / 2 >= revealAt) { p.st = 2; p.right = start + T; this.ev |= 128; }
         } else if (p.kind === SHIFT) {
           if (!p.st && this.x + PW / 2 >= start - 1.2 * T) { p.st = 1; this.ev |= 128; }
           if (p.st === 1) { p.left = Math.max(start - 2 * T, p.left - 128); p.right = p.left + 2 * T; if (p.left === start - 2 * T) p.st = 2; }
         } else if (p.kind === CHASE) {
           if (!p.st && this.x + PW / 2 >= start - 0.7 * T) { p.st = 1; p.right = start + T; this.ev |= 128; }
-          if (p.st === 1 && this.x + PW / 2 >= start + 2.5 * T) { p.st = 2; this.ev |= 128; }
-          if (p.st === 2) { p.right = Math.min(9 * T, p.right + 64); if (p.right === 9 * T) p.st = 3; }
+          if (p.st === 1 && this.x + PW / 2 >= start + (this.rulesVersion >= 10 ? 3.5 : 2.5) * T) { p.st = 2; this.ev |= 128; }
+          if (p.st === 2) { p.right = Math.min(9 * T, p.right + (this.rulesVersion >= 10 ? 84 : 64)); if (p.right === 9 * T) p.st = 3; }
         } else if (p.kind === RELAY && !p.front) {
           if (!p.st && this.x + PW / 2 >= 2 * T) { p.st = 1; this.ev |= 128; }
-          if (p.st === 1) { p.right = Math.min(6 * T, p.right + 72); if (p.right === 6 * T) p.st = 2; }
-          if (p.st === 2 && this.x + PW / 2 >= 8 * T) { p.st = 3; this.ev |= 128; }
+          if (p.st === 1) { p.right = Math.min(6 * T, p.right + (this.rulesVersion >= 10 ? 84 : 72)); if (p.right === 6 * T) p.st = 2; }
+          if (p.st === 2 && this.x + PW / 2 >= (this.rulesVersion >= 10 ? 8.6 : 8) * T) { p.st = 3; this.ev |= 128; }
           if (p.st === 3) {
             p.right = Math.max(5 * T, p.right - 128);
             var front = this.pits[k + 1]; front.left = p.right + 4 * T; front.st = 1;
@@ -376,7 +376,7 @@ var MLMG = (function () {
     var keys = Object.keys(o).sort().join(',');
     if (keys !== 'c,f,g,m,v') throw new Error('快照字段不对');
     if (o.v === 1) throw new Error('这是第一版的快照，物理手感已更新，旧关卡影子无法回放');
-    if (o.v !== 2 && o.v !== 3 && o.v !== 4 && o.v !== 5 && o.v !== 6 && o.v !== 7 && o.v !== 8 && o.v !== 9) throw new Error('快照版本不支持');
+    if (o.v !== 2 && o.v !== 3 && o.v !== 4 && o.v !== 5 && o.v !== 6 && o.v !== 7 && o.v !== 8 && o.v !== 9 && o.v !== 10) throw new Error('快照版本不支持');
     if (typeof o.m !== 'string') throw new Error('地图编码长度不对');
     if (o.v === 2 && o.m.length !== 48) throw new Error('地图编码长度不对');
     if (o.v >= 3 && o.m.length !== 64) throw new Error('地图编码长度不对');

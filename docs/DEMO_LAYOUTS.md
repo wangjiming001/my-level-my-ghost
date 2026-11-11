@@ -1,5 +1,7 @@
 # 示范关布局 v14：右移落点陷阱与量化追赶
 
+**v16当前预览：** 空间、速度与阈值已更新到规则v10，详见[V16_PREVIEW.md](V16_PREVIEW.md)。
+
 **当前预览更新：** v15已使用规则v9；当前布局和参数见[V15_PREVIEW.md](V15_PREVIEW.md)。下文v8右移/68tick延时为历史版本，不能覆盖v15。
 
 依据：[原作实测](LEVEL_DEVIL_FIRST_FIVE_STUDY.md)、[速度与余量标定](PACING_MEASUREMENTS.md)。新快照v8，旧v2–v7保留原规则。固定全图和人物大小不变。
