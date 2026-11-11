@@ -53,4 +53,5 @@ fs.writeFileSync(path.join(dist, 'js/platform.js'), files['src/platform.js']);
 fs.writeFileSync(path.join(dist, 'js/ui.js'), files['src/ui_v3.js']);
 fs.copyFileSync('assets/atlas.png', path.join(dist, 'assets/atlas.png'));
 fs.copyFileSync('assets/bg.jpg', path.join(dist, 'assets/bg.jpg'));
+fs.copyFileSync('assets/hero06.png', path.join(dist, 'assets/hero06.png'));
 console.log('dist written');

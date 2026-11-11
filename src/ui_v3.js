@@ -36,9 +36,28 @@
 
   // ---------------- canvas ----------------
   var cv = $('cv'), ctx = cv.getContext('2d'), cssW = 360, scale = 1, dpr = 1;
+  var viewCols = COLS, viewRows = ROWS, camX = 0, camY = 0;
   function resize() {
     var wrap = $('stageWrap'); cssW = Math.max(200, wrap.clientWidth - 12); dpr = Math.min(window.devicePixelRatio || 1, 3);
-    var cssH = Math.round(cssW * ROWS / COLS); cv.style.height = cssH + 'px'; cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); scale = cv.width / (COLS * T);
+    var closeView = game && !(editor && editor.on);
+    viewCols = closeView ? 5 : COLS; viewRows = closeView ? 4 : ROWS;
+    var cssH = Math.round(cssW * viewRows / viewCols); cv.style.height = cssH + 'px'; cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); scale = cv.width / (viewCols * T);
+  }
+  function applyCamera(w) {
+    var maxX = (COLS - viewCols) * T * scale, maxY = (ROWS - viewRows) * T * scale;
+    camX = Math.max(0, Math.min(maxX, (w.x + M.PW / 2) * scale - cv.width * 0.4));
+    camY = Math.max(0, Math.min(maxY, (w.y + M.PH / 2) * scale - cv.height * 0.58));
+    ctx.translate(-camX, -camY);
+  }
+  function drawReaction(g) {
+    if (!g.dseq || g.dseq.phase !== 'hit') return;
+    var size = Math.min(cssW * 0.3, 112) * dpr, px = cv.width - size - 10 * dpr, py = 10 * dpr;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#fff6e6'; ctx.strokeStyle = '#40312a'; ctx.lineWidth = 3 * dpr;
+    ctx.fillRect(px, py, size, size); ctx.strokeRect(px, py, size, size);
+    ctx.beginPath(); ctx.rect(px + 3 * dpr, py + 3 * dpr, size - 6 * dpr, size - 6 * dpr); ctx.clip();
+    ART3.bear(ctx, px + size * 0.03, py + size * 0.23, size * 0.94, size * 1.4, { anim: 'dizzy', f: g.dseq.t });
+    ctx.restore();
   }
   window.addEventListener('resize', resize);
   var goneAt = {}, popAt = {};
@@ -334,6 +353,7 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (g.shake > 0) { var a = g.shake * s * 0.012; ctx.translate((Math.random() * 2 - 1) * a, (Math.random() * 2 - 1) * a); }
     if (d && d.phase === 'replay') { renderReplay(g, d); return; }
+    applyCamera(g.world);
     drawMap(ctx, g.map, scale, g.world, 'play', rt);
     if (g.gworld && !g.gDone) { var gw = g.gworld, gb = hb(gw), go = bearState(gw, g.tick); go.alpha = 0.5; go.tint = 'rgba(150,170,255,0.55)'; ART3.bear(ctx, gb[0], gb[1], gb[2], gb[3], go); }
     var w = g.world, p = hb(w);
@@ -349,6 +369,7 @@
     }
     if (d) drawTaunt(g, d);
     else drawTension(g);
+    drawReaction(g);
   }
   function drawTaunt(g, d) {
     if (!d.hasKiller || d.phase === 'hit') return; var s = T * scale, kx = d.kx * scale, ky = Math.min(d.ky * scale, ROWS * s - s * 0.5), t = d.phase === 'rag' ? d.t : RAG + d.t;
@@ -373,12 +394,13 @@
     var n = d.frames.length, f = d.t, idx;
     if (n >= 72) idx = f < 20 ? f * 3 : Math.min(n - 1, 60 + (f - 20)); else idx = Math.min(n - 1, Math.round(f / (REPLAY - 1) * (n - 1)));
     var w = d.frames[idx], s = T * scale, saveG = goneAt, saveP = popAt; goneAt = {}; popAt = {};
+    applyCamera(w);
     drawMap(ctx, g.map, scale, w, 'play', rt); goneAt = saveG; popAt = saveP;
     var p = hb(w), o = bearState(w, w.tick); if (idx >= n - 1) { o.anim = 'dizzy'; o.f = 2; } ART3.bear(ctx, p[0], p[1], p[2], p[3], o);
     ctx.fillStyle = 'rgba(40,60,120,0.25)'; ctx.fillRect(0, 0, COLS * s, ROWS * s);
     ctx.fillStyle = 'rgba(255,255,255,0.08)'; for (var y = (rt * 3) % 8; y < ROWS * s; y += 8 * dpr) ctx.fillRect(0, y, COLS * s, dpr);
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = s * 0.06; ctx.font = 'bold ' + Math.round(s * 0.36) + 'px sans-serif'; ctx.strokeText('◀◀ 回放：你是怎么死的', s * 0.25, s * 0.55); ctx.fillText('◀◀ 回放：你是怎么死的', s * 0.25, s * 0.55);
-    ctx.fillStyle = '#ff5d73'; ctx.beginPath(); ctx.arc(COLS * s - s * 0.45, s * 0.42, s * 0.12, 0, 7); if (rt % 30 < 18) ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = s * 0.06; ctx.font = 'bold ' + Math.round(s * 0.36) + 'px sans-serif'; ctx.strokeText('◀◀ 回放：你是怎么死的', camX + s * 0.25, camY + s * 0.55); ctx.fillText('◀◀ 回放：你是怎么死的', camX + s * 0.25, camY + s * 0.55);
+    ctx.fillStyle = '#ff5d73'; ctx.beginPath(); ctx.arc(camX + cv.width - s * 0.45, camY + s * 0.42, s * 0.12, 0, 7); if (rt % 30 < 18) ctx.fill();
     drawTaunt(g, d);
   }
   function drawGridLines() { var s = T * scale; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;

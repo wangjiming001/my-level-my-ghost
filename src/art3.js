@@ -2,10 +2,14 @@
    A few Kenney emotes/faces remain for death-comedy overlays. Render-only. */
 var ART3 = (function () {
   'use strict';
+  var heroImg = new Image(), heroLoaded = false, heroTint = null;
   var img = new Image(), bg = new Image(), ok = 0, R = ATLAS.r, O = ATLAS.o, N = ATLAS.n, B = ATLAS.bear.body, cache = {};
   function ready(cb) {
-    function done() { if (++ok === 2) cb(); }
+    function done() { if (++ok === 3) cb(); }
     img.onload = done; bg.onload = done;
+    heroImg.onload = function () { heroLoaded = true; done(); };
+    heroImg.onerror = function () { done(); };
+    heroImg.src = './assets/hero06.png';
     img.src = ATLAS.atlasSrc || ATLAS.img || './assets/atlas.png';
     bg.src = ATLAS.bgSrc || ATLAS.bg || './assets/bg.jpg';
   }
@@ -47,7 +51,7 @@ var ART3 = (function () {
       g.globalAlpha = 0.95; sprFit(g, 'start', x + s * 0.5, y + s, s * 0.7); g.globalAlpha = 1;
     },
     // Original concept 06: cheeky stickman. Rendering only; hitbox/physics unchanged.
-    bear: function (g, x, y, w, h, o) {
+    bearVector: function (g, x, y, w, h, o) {
       o = o || {};
       var anim = o.anim || 'idle', f = o.f || 0, shocked = anim === 'dead' || anim === 'dizzy';
       var running = anim === 'run', airborne = anim === 'up' || anim === 'fall';
@@ -103,6 +107,34 @@ var ART3 = (function () {
         g.lineWidth = 1.8; line([7, 20, 9, 25]); line([15, 17, 18, 22]);
       }
       g.restore(); g.restore();
+    },
+    // Image frames preserve the approved artwork; transforms remain render-only.
+    bear: function (g, x, y, w, h, o) {
+      o = o || {};
+      if (!heroLoaded) return A.bearVector(g, x, y, w, h, o);
+      var anim = o.anim || 'idle', f = o.f || 0, index = Math.floor(f / 3) % 4;
+      if (anim === 'run') index = 4 + Math.floor(f / 2) % 4;
+      else if (anim === 'up') index = 8;
+      else if (anim === 'fall') index = 9;
+      else if (anim === 'dizzy') index = 10;
+      else if (anim === 'dead') index = 11;
+      var source = heroImg;
+      if (o.tint) {
+        if (!heroTint) {
+          heroTint = document.createElement('canvas'); heroTint.width = 768; heroTint.height = 576;
+          var tc = heroTint.getContext('2d'); tc.drawImage(heroImg, 0, 0);
+          tc.globalCompositeOperation = 'source-atop'; tc.fillStyle = '#a8b8f5'; tc.fillRect(0, 0, 768, 576);
+        }
+        source = heroTint;
+      }
+      var height = h * 1.18, width = height;
+      g.save(); g.globalAlpha = o.alpha === undefined ? 1 : o.alpha;
+      g.translate(x + w / 2, y + h / 2);
+      if (o.rot) g.rotate(o.rot);
+      g.scale((o.flip ? -1 : 1) * (o.sx || 1), o.sy || 1);
+      g.imageSmoothingEnabled = true;
+      g.drawImage(source, (index % 4) * 192, Math.floor(index / 4) * 192, 192, 192, -width / 2, h / 2 - height * 184 / 192, width, height);
+      g.restore();
     },
     emote: function (g, name, cx, by, w, alpha) { g.globalAlpha = alpha === undefined ? 1 : alpha; sprFit(g, 'emo_' + name, cx, by, w); g.globalAlpha = 1; },
     face: function (g, name, cx, cy, w) { var r = R['face_' + name]; if (!r) return; var h = w * r[3] / r[2]; spr(g, 'face_' + name, cx - w / 2, cy - h / 2, w, h); },
