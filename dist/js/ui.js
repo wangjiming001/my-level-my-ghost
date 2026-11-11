@@ -39,15 +39,12 @@
   var viewCols = COLS, viewRows = ROWS, camX = 0, camY = 0;
   function resize() {
     var wrap = $('stageWrap'); cssW = Math.max(200, wrap.clientWidth - 12); dpr = Math.min(window.devicePixelRatio || 1, 3);
-    var closeView = game && !(editor && editor.on);
-    viewCols = closeView ? 5 : COLS; viewRows = closeView ? 4 : ROWS;
+    viewCols = COLS; viewRows = ROWS;
     var cssH = Math.round(cssW * viewRows / viewCols); cv.style.height = cssH + 'px'; cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); scale = cv.width / (viewCols * T);
   }
   function applyCamera(w) {
-    var maxX = (COLS - viewCols) * T * scale, maxY = (ROWS - viewRows) * T * scale;
-    camX = Math.max(0, Math.min(maxX, (w.x + M.PW / 2) * scale - cv.width * 0.4));
-    camY = Math.max(0, Math.min(maxY, (w.y + M.PH / 2) * scale - cv.height * 0.58));
-    ctx.translate(-camX, -camY);
+    camX = 0; camY = 0;
+    // The whole map stays fixed; character animation and reaction inset remain.
   }
   function drawReaction(g) {
     if (!g.dseq || g.dseq.phase !== 'hit') return;
@@ -100,18 +97,19 @@
   }
 
   // ---------------- input ----------------
+  // A short tap produces 10 recorded jump ticks; holding still controls full height.
   var held = { L: false, R: false, J: false }, jLatch = 0;
   function anyPress() { if (game && game.dseq && game.dseq.phase !== 'hit') skipDeath(); }
   function bindBtn(id, key) {
     var el = $(id);
-    function down(e) { e.preventDefault(); if (!held[key] && key === 'J') jLatch = 2; held[key] = true; el.classList.add('down'); anyPress(); }
+    function down(e) { e.preventDefault(); if (!held[key] && key === 'J') jLatch = 10; held[key] = true; el.classList.add('down'); anyPress(); }
     function up(e) { e.preventDefault(); held[key] = false; el.classList.remove('down'); }
     el.addEventListener('touchstart', down, { passive: false }); el.addEventListener('touchend', up, { passive: false }); el.addEventListener('touchcancel', up, { passive: false });
     el.addEventListener('mousedown', down); el.addEventListener('mouseup', up); el.addEventListener('mouseleave', function (e) { if (held[key]) up(e); });
   }
   bindBtn('bL', 'L'); bindBtn('bR', 'R'); bindBtn('bJ', 'J');
   var KEYS = { ArrowLeft: 'L', a: 'L', A: 'L', ArrowRight: 'R', d: 'R', D: 'R', ' ': 'J', ArrowUp: 'J', w: 'J', W: 'J' };
-  document.addEventListener('keydown', function (e) { var k = KEYS[e.key]; if (k && game) { e.preventDefault(); if (e.repeat) return; if (k === 'J' && !held.J) jLatch = 2; held[k] = true; $('b' + k).classList.add('down'); anyPress(); } });
+  document.addEventListener('keydown', function (e) { var k = KEYS[e.key]; if (k && game) { e.preventDefault(); if (e.repeat) return; if (k === 'J' && !held.J) jLatch = 10; held[k] = true; $('b' + k).classList.add('down'); anyPress(); } });
   document.addEventListener('keyup', function (e) { var k = KEYS[e.key]; if (k) { held[k] = false; $('b' + k).classList.remove('down'); } });
   function sampleInput() { var s = (held.L ? M.IN.L : 0) | (held.R ? M.IN.R : 0) | ((held.J || jLatch > 0) ? M.IN.J : 0); if (jLatch > 0) jLatch--; return s; }
   function clearInput() { held.L = held.R = held.J = false; jLatch = 0; ['bL', 'bR', 'bJ'].forEach(function (b) { $(b).classList.remove('down'); }); }
@@ -317,7 +315,7 @@
     var share = '《我的关，我的影子》' + (g.mode === 'demo' ? '示范关「' + g.title + '」' : '') + ' ' + (skulls || '✨') + '🏁 ' + fmt(my).replace(' ', '') + (vs ? '（' + vs + '）' : '');
     $('rShare').textContent = share; $('rShare').setAttribute('data-t', share);
     $('rNext').style.display = (g.mode === 'demo' && g.levelIdx < LEVELS.length - 1) ? '' : 'none'; $('rMsg').textContent = '';
-    if (g.mode === 'demo') { var best = +store('best' + g.levelIdx) || 0; if (!best || my < best) store('best' + g.levelIdx, String(my)); }
+    if (g.mode === 'demo') { var best = +store('best_layout_v7_' + g.levelIdx) || 0; if (!best || my < best) store('best_layout_v7_' + g.levelIdx, String(my)); }
     show('sResult');
   }
 
@@ -737,7 +735,7 @@
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
     startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: (i + 1) + '. ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
-    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best' + i) || 0;
+    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_layout_v7_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';
       b.onclick = function () { playDemo(i); }; list.appendChild(b); }); }
   $('rAgain').onclick = function () { var g = game; if (!g) return show('sMenu'); if (g.mode === 'demo') playDemo(g.levelIdx); else startChallenge(g.snapshot, g.ghostLabel); };

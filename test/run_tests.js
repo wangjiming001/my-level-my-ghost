@@ -76,6 +76,7 @@ L.forEach(function (l, i) {
   console.log('L' + (i + 1) + ' ' + l.name + ': AI解 ' + ref.result + '@' + ref.frame + 'f(' + (ref.frame / 60).toFixed(2) + 's) end=(' + ref.x + ',' + ref.y + ') 100次一致=' + same +
     ' | 往返=' + (re.frames === d.frames) + ' | 一直按右:' + naiveR.result + ' 一直右+跳:' + naiveRJ.result + ' | 粗操作(每8帧换一次键)可解=' + (coarse ? (coarse.length / 60).toFixed(2) + 's' : 'NO') +
     ' | 快照 ' + M.utf8len(snap) + 'B, ' + M.inputsToEvents(inputs).length + '个事件');
+  ok(!!coarse, 'coarse 8-tick controls can clear L' + (i + 1));
   ok(ref.result === 'win' && same === 100, 'determinism L' + (i + 1)); ok(re.frames === d.frames, 'roundtrip L' + (i + 1));
   ok(JSON.parse(snap).v === 3, 'demo ghosts encoded as v3');
 });
@@ -112,7 +113,15 @@ var bad = {
   '篡改地图删终点并重签': (function () { var x = JSON.parse(good); var m = M.unpackMap(M.b64dec(x.m)); for (var i = 0; i < m.length; i++) if (m[i] === 4) m[i] = 0; x.m = M.b64enc(M.packMap(m)); return JSON.stringify(resign(x)); })(),
   '篡改地图放4个机关并重签': (function () { var x = JSON.parse(good); var m = M.unpackMap(M.b64dec(x.m)); m[0] = 5; m[1] = 6; m[2] = 7; m[3] = 5; x.m = M.b64enc(M.packMap(m)); return JSON.stringify(resign(x)); })(),
   '篡改地图把刺放路上并重签': (function () { var x = JSON.parse(good); var m = M.unpackMap(M.b64dec(x.m));
-    m[54] = 2; // L1 mid-shelf landing cell (row 4, col 6); recorded ghost lands here
+    // Find a lethal empty cell on the actual recorded route, independent of demo layout.
+    var inputs = M.decodeSnapshot(good).inputs, found = false;
+    for (var j = 0; j < m.length; j++) {
+      if (m[j] !== M.TILE.E) continue;
+      m[j] = M.TILE.SPK;
+      if (M.simulate(m, inputs).result === 'dead') { found = true; break; }
+      m[j] = M.TILE.E;
+    }
+    if (!found) throw new Error('No lethal route mutation found');
     x.m = M.b64enc(M.packMap(m)); return JSON.stringify(resign(x)); })(),
   '影子换成乱码并重签': (function () { var x = JSON.parse(good); x.g = '////////'; return JSON.stringify(resign(x)); })(),
   '影子varint超长并重签': (function () { var x = JSON.parse(good); x.g = M.b64enc(new Uint8Array([0, 255, 255, 255, 255, 1])); return JSON.stringify(resign(x)); })(),

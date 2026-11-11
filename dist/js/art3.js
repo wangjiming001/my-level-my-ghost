@@ -127,7 +127,7 @@ var ART3 = (function () {
         }
         source = heroTint;
       }
-      var height = h * 1.18, width = height;
+      var height = h * 1.55, width = height;
       g.save(); g.globalAlpha = o.alpha === undefined ? 1 : o.alpha;
       g.translate(x + w / 2, y + h / 2);
       if (o.rot) g.rotate(o.rot);
