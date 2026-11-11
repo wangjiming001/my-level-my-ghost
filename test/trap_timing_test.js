@@ -13,7 +13,7 @@ var blockMap = map(['............','............','......f.....','............',
 function blockWorld(version) { var m = new Uint8Array(blockMap); if (version) m.rulesVersion = version; var w = new M.World(m); w.y = 6 * M.T - M.PH; w.grounded = true; return w; }
 w = blockWorld(); w.x = 6 * M.T - M.PW - 300; w.step(0); assert.equal(w.blocks[0].st, 0, 'v4 block waits until player is underneath');
 old = blockWorld(3); old.x = 6 * M.T - M.PW - 300; old.step(0); assert.equal(old.blocks[0].st, 1);
-w.x = 6 * M.T + 96 - M.PW + 1; w.step(0); assert.equal(w.blocks[0].st, 4);
+w.x = 6 * M.T + 96 - M.PW + 1; w.step(0); assert.equal(w.blocks[0].st, 1);
 var copy = w.clone(); assert.equal(copy.rulesVersion, M.VERSION); assert.equal(copy.key(), w.key()); for (var i=0;i<35;i++) { assert.equal(copy.step(M.IN.L),w.step(M.IN.L)); assert.equal(copy.key(),w.key()); }
 w.reset(); assert.equal(w.blocks[0].st, 0);
 var saved = require('./v3_snapshot_fixture.json'), d = M.decodeSnapshot(saved);
@@ -22,5 +22,6 @@ assert.equal(M.simulate(d.map,d.inputs).result,'win');
 assert.equal(JSON.parse(M.encodeSnapshot(d.map,d.inputs)).v,3,'resharing old map keeps its rules');
 assert.equal(M.decodeSnapshot(require('./v2_snapshot_fixture.json')).version,2);
 assert.equal(M.decodeSnapshot(require('./v4_snapshot_fixture.json')).version,4);
+assert.equal(M.decodeSnapshot(require('./v5_snapshot_fixture.json')).version,5);
 require('../src/demo_ghosts.json').forEach(function (json) { var a=M.decodeSnapshot(json); assert.equal(a.version,M.VERSION); assert(M.utf8len(json)<=2048); });
-console.log('PASS: close-only spike/block triggers, airborne exclusion, reset/clone determinism, v2/v3/v4/v5 compatibility');
+console.log('PASS: close-only spike/block triggers, airborne exclusion, reset/clone determinism, v2-v6 compatibility');

@@ -138,7 +138,7 @@
     spike: ['我这么明显…', '看到了还撞？', '扎心了吧'],
     fall: ['下面没有路哦', '自由落体～']
   };
-  var HIT = 9, RAG = 30, REPLAY = 32;
+  var HIT = 4, RAG = 12, REPLAY = 32;
   function onDeath(g) {
     var w = g.world, cause = w.cause, kc = w.killer, kx, ky;
     if (kc >= 1000) { var bk = w.blocks[kc - 1000]; kx = (bk.c * T + T / 2); ky = bk.y + T / 2; g.reveal[blockCell(g.map, kc - 1000)] = true; }
@@ -162,7 +162,7 @@
         if (d.cause === 'spike' || d.cause === 'hidden' || d.cause === 'block') for (var i = 0; i < 6; i++) d.pieces.push({ x: d.rag.x + (i % 3) * 200, y: d.rag.y + ((i / 3) | 0) * 300, vx: (i % 3 - 1) * 30 + (i * 7 % 11) - 5, vy: -90 - (i * 13 % 50), r: 0, vr: (i % 2 ? 0.3 : -0.3) }); } return; }
     if (d.phase === 'rag') { var r = d.rag; r.x += r.vx; r.y += r.vy; r.vy += 9; r.rot += r.vr;
       for (var k = 0; k < d.pieces.length; k++) { var p = d.pieces[k]; p.x += p.vx; p.y += p.vy; p.vy += 9; p.r += p.vr; }
-      if (d.t >= RAG) { d.phase = 'replay'; d.t = 0; } return; }
+      if (d.t >= RAG) respawn(g); return; }
     if (d.phase === 'replay' && d.t >= REPLAY) respawn(g);
   }
   function respawn(g) { g.world.reset(); g.rec = []; g.dseq = null; goneAt = {}; popAt = {}; g.spawnT = 10; }
@@ -180,7 +180,7 @@
       ghostLabel: opts.ghostLabel || '作者', levelIdx: opts.levelIdx, hint: opts.hint || trapHint(opts.map), snapshot: opts.snapshot || null,
       tick: 0, deaths: 0, rec: [], done: false, gDone: false, dseq: null, shake: 0, reveal: {}, deathsAt: [], squash: 0, spawnT: 10 };
     $('pTitle').textContent = opts.title; editor.on = false; $('sPlay').classList.remove('editing'); $('edit').classList.remove('on'); $('pad').style.display = 'flex';
-    $('legend').innerHTML = game.ghost ? '<span><i style="background:' + C.hero + '"></i>你</span><span><i style="background:#c8cde0;opacity:.6"></i>' + game.ghostLabel + '的影子</span><span>死了可点任意键跳过回放</span>' : '<span>死了可点任意键跳过回放</span>';
+    $('legend').innerHTML = game.ghost ? '<span><i style="background:' + C.hero + '"></i>你</span><span><i style="background:#c8cde0;opacity:.6"></i>' + game.ghostLabel + '的影子</span><span>翻车后快速重来，可点任意键跳过动作</span>' : '<span>翻车后快速重来，可点任意键跳过动作</span>';
     setInfo(opts.mode === 'record' ? '先自己通关一次：<b>这次干净通关的操作会被录成影子</b>。死了从头录，最长 20 秒。' : (game.ghost ? '和' + game.ghostLabel + '的影子同时起跑，到达<b>终点旗</b>就算赢。' : '到达<b>终点旗</b>就算赢。'));
     show('sPlay'); updStat();
   }
@@ -315,7 +315,7 @@
     var share = '《我的关，我的影子》' + (g.mode === 'demo' ? '示范关「' + g.title + '」' : '') + ' ' + (skulls || '✨') + '🏁 ' + fmt(my).replace(' ', '') + (vs ? '（' + vs + '）' : '');
     $('rShare').textContent = share; $('rShare').setAttribute('data-t', share);
     $('rNext').style.display = (g.mode === 'demo' && g.levelIdx < LEVELS.length - 1) ? '' : 'none'; $('rMsg').textContent = '';
-    if (g.mode === 'demo') { var best = +store('best_rules_v5_layout_v8_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v5_layout_v8_' + g.levelIdx, String(my)); }
+    if (g.mode === 'demo') { var best = +store('best_rules_v6_layout_v9_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v6_layout_v9_' + g.levelIdx, String(my)); }
     show('sResult');
   }
 
@@ -735,7 +735,7 @@
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
     startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: (i + 1) + '. ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
-    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v5_layout_v8_' + i) || 0;
+    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v6_layout_v9_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';
       b.onclick = function () { playDemo(i); }; list.appendChild(b); }); }
   $('rAgain').onclick = function () { var g = game; if (!g) return show('sMenu'); if (g.mode === 'demo') playDemo(g.levelIdx); else startChallenge(g.snapshot, g.ghostLabel); };

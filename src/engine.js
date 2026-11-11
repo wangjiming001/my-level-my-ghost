@@ -11,7 +11,7 @@ var MLMG = (function () {
   var COLLAPSE_DELAY = 14;                     // ticks after first step
   var BLOCK_V0 = 24, BLOCK_G = 6, BLOCK_MAX = 200, BLOCK_WARN = 24;
   var MAX_FRAMES = 1200;                       // 20 s @ 60 ticks/s
-  var SNAP_VERSION = 5, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
+  var SNAP_VERSION = 6, SNAP_LIMIT = 2048, MAX_TRAPS = 3;
   // tile codes: 0-7 same as v2, 8 = trampoline (v3, 4-bit maps)
   var E = 0, GND = 1, SPK = 2, ST = 3, GL = 4, COL = 5, HID = 6, FALL = 7, TRM = 8;
   var BOUNCE_V = 300; // tuned so a no-hold bounce rises ~3 tiles
@@ -52,7 +52,7 @@ var MLMG = (function () {
     for (i = 0; i < m.length; i++) {
       if (m[i] === ST) { var c = i % COLS, r = (i / COLS) | 0;
         this.x = c * T + ((T - PW) >> 1); this.y = r * T + T - PH; }
-      if (m[i] === FALL) this.blocks.push({ c: i % COLS, y: ((i / COLS) | 0) * T, vy: 0, st: 0, warn: 0 }); // st 0 idle,1 falling,2 landed,3 gone,4 warning
+      if (m[i] === FALL) this.blocks.push({ c: i % COLS, y: ((i / COLS) | 0) * T, vy: 0, st: 0, warn: 0, activeHit: false, hitTop: 0, hitBottom: 0 }); // st 0 idle,1 falling,2 landed,3 gone,4 warning
     }
   };
   World.prototype.solid = function (c, r, skip) {
@@ -114,7 +114,7 @@ var MLMG = (function () {
     // collapse floors: trigger when standing on them
     if (this.grounded) { r = fdiv(this.y + PH);
       if (r >= 0 && r < ROWS) for (c = c0; c <= c1; c++) { i = r * COLS + c;
-        if (this.map[i] === COL && this.collapse[i] === 0) { this.collapse[i] = COLLAPSE_DELAY; this.ev |= 4; } if (this.map[i] === COL) this.lastCol = i; }
+        if (this.map[i] === COL && this.collapse[i] === 0) { this.collapse[i] = this.rulesVersion >= 6 ? 4 : COLLAPSE_DELAY; this.ev |= 4; } if (this.map[i] === COL) this.lastCol = i; }
     }
     for (i = 0; i < this.collapse.length; i++) if (this.collapse[i] > 0) { this.collapse[i]--; if (this.collapse[i] === 0) this.collapse[i] = -1; }
     // hidden spikes pop when player approaches near floor level
@@ -127,22 +127,27 @@ var MLMG = (function () {
     }
     // falling blocks
     for (k = 0; k < this.blocks.length; k++) { var b = this.blocks[k];
+      b.activeHit = false;
       if (b.st === 0) {
-        var underBlock = this.rulesVersion < 4
+        var underBlock = this.rulesVersion >= 6
+          ? this.x < b.c * T + T + 128 && this.x + PW > b.c * T - 128 && this.y > b.y + T
+          : this.rulesVersion < 4
           ? this.x < b.c * T + T + T && this.x + PW > b.c * T - T && this.y > b.y
           : this.x < b.c * T + T - 96 && this.x + PW > b.c * T + 96 && this.y > b.y + T;
         if (underBlock) {
-          if (this.rulesVersion >= 5) { b.st = 4; b.warn = BLOCK_WARN; this.ev |= 64; }
-          else { b.st = 1; b.vy = BLOCK_V0; this.ev |= 16; }
+          if (this.rulesVersion === 5) { b.st = 4; b.warn = BLOCK_WARN; this.ev |= 64; }
+          else { b.st = 1; b.vy = this.rulesVersion >= 6 ? 768 : BLOCK_V0; this.ev |= 16; }
         }
       } else if (b.st === 4) {
         b.warn--; if (b.warn === 0) { b.st = 1; b.vy = BLOCK_V0; this.ev |= 16; }
       } else if (b.st === 1) {
-        var ny = b.y + b.vy; b.vy += BLOCK_G; if (b.vy > BLOCK_MAX) b.vy = BLOCK_MAX;
+        var oldY = b.y, ny = b.y + b.vy; b.vy += BLOCK_G;
+        var maxBlockSpeed = this.rulesVersion >= 6 ? T : BLOCK_MAX; if (b.vy > maxBlockSpeed) b.vy = maxBlockSpeed;
         var br = fdiv(ny + T - 1);
         if (br >= ROWS) { if (ny > ROWS * T) b.st = 3; b.y = ny; }
         else if (this.solid(b.c, br, b) && ny + T > br * T) { b.y = (br - 1) * T; b.st = 2; b.vy = 0; }
         else b.y = ny;
+        if (this.rulesVersion >= 6) { b.activeHit = true; b.hitTop = Math.min(oldY, b.y); b.hitBottom = Math.max(oldY + T, b.y + T); }
       }
     }
     this.tick++;
@@ -156,7 +161,7 @@ var MLMG = (function () {
           overlap(this.x, this.y, PW, PH, c * T + 160, r * T + 480, T - 320, T - 480)) { this.dead = true; this.cause = this.map[i] === HID ? 'hidden' : 'spike'; this.killer = i; return 1; }
     }
     for (k = 0; k < this.blocks.length; k++) { b = this.blocks[k];
-      if (b.st === 1 && overlap(this.x, this.y, PW, PH, b.c * T + 32, b.y, T - 64, T)) { this.dead = true; this.cause = 'block'; this.killer = 1000 + k; return 1; }
+      if (((this.rulesVersion >= 6 && b.activeHit) || b.st === 1) && overlap(this.x, this.y, PW, PH, b.c * T + 32, this.rulesVersion >= 6 && b.activeHit ? b.hitTop : b.y, T - 64, this.rulesVersion >= 6 && b.activeHit ? b.hitBottom - b.hitTop : T)) { this.dead = true; this.cause = 'block'; this.killer = 1000 + k; return 1; }
     }
     for (r = r0; r <= r1; r++) for (c = c0; c <= c1; c++) {
       if (c < 0 || c >= COLS || r < 0 || r >= ROWS) continue;
@@ -169,7 +174,7 @@ var MLMG = (function () {
     w.map = this.map; w.rulesVersion = this.rulesVersion; w.tick = this.tick; w.cause = this.cause; w.killer = this.killer; w.lastCol = this.lastCol; w.ev = this.ev; w.face = this.face; w.coyote = this.coyote; w.jbuf = this.jbuf; w.dead = this.dead; w.won = this.won; w.grounded = this.grounded;
     w.vx = this.vx; w.vy = this.vy; w.x = this.x; w.y = this.y; w.prevJ = this.prevJ; w.jumpHeld = this.jumpHeld; w.sprung = this.sprung;
     w.collapse = new Int16Array(this.collapse); w.hidden = new Uint8Array(this.hidden);
-    w.blocks = this.blocks.map(function (b) { return { c: b.c, y: b.y, vy: b.vy, st: b.st, warn: b.warn }; });
+    w.blocks = this.blocks.map(function (b) { return { c: b.c, y: b.y, vy: b.vy, st: b.st, warn: b.warn, activeHit: b.activeHit, hitTop: b.hitTop, hitBottom: b.hitBottom }; });
     return w;
   };
   World.prototype.key = function () {
@@ -284,7 +289,7 @@ var MLMG = (function () {
     var keys = Object.keys(o).sort().join(',');
     if (keys !== 'c,f,g,m,v') throw new Error('快照字段不对');
     if (o.v === 1) throw new Error('这是第一版的快照，物理手感已更新，旧关卡影子无法回放');
-    if (o.v !== 2 && o.v !== 3 && o.v !== 4 && o.v !== 5) throw new Error('快照版本不支持');
+    if (o.v !== 2 && o.v !== 3 && o.v !== 4 && o.v !== 5 && o.v !== 6) throw new Error('快照版本不支持');
     if (typeof o.m !== 'string') throw new Error('地图编码长度不对');
     if (o.v === 2 && o.m.length !== 48) throw new Error('地图编码长度不对');
     if (o.v >= 3 && o.m.length !== 64) throw new Error('地图编码长度不对');

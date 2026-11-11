@@ -4,10 +4,12 @@ steps('settle',0,2);steps('run to step',2,12);steps('jump onto low step',6,20);u
 return{phases,seq,w};}
 if(require.main===module){
  const assert=require('assert');
- for(const delay of [0,4,8,12]) { const r=run(M.parseRows(L[2].rows),{delay}); assert(r.w.won&&!r.w.dead,'clear after '+delay+' ticks reaction'); assert(r.phases.some(p=>p.block===2),'wait for stone landing'); }
- const old=M.decodeSnapshot(require('./v4_snapshot_fixture.json'));const bad=run(old.map,{delay:0});assert(bad.w.dead&&bad.w.cause==='block','regression: old indicated retreat route was unsafe');
- const w=new M.World(M.parseRows(L[2].rows));w.x=6*M.T-M.PW+120;w.y=4*M.T-M.PH;w.grounded=true;w.step(0);assert.equal(w.blocks[0].st,4);assert.equal(w.blocks[0].warn,M.BLOCK_WARN);
- for(let i=0;i<M.BLOCK_WARN-1;i++){w.step(0);assert.equal(w.blocks[0].st,4)}w.step(0);assert.equal(w.blocks[0].st,1);
- assert.equal(w.clone().rulesVersion,5);w.reset();assert.equal(w.blocks[0].st,0);assert.equal(w.blocks[0].warn,0);
- console.log('PASS: simple bait/retreat/wait/jump route with 0-200ms reaction; warning duration; reset; unsafe old route reproduced');
+ const r=run(M.parseRows(L[2].rows),{delay:0});assert(r.w.won&&!r.w.dead,'known bait route clears without waiting for a slow warning');
+ const rush=new M.World(M.parseRows(L[2].rows));rush.x=6*M.T-M.PW-129;rush.y=4*M.T-M.PH;rush.grounded=true;rush.vx=M.SPEED;rush.step(M.IN.R);
+ assert.equal(rush.blocks[0].st,1);assert(rush.x+M.PW<6*M.T,'trigger line is outside lethal column');let n=0;while(!rush.dead&&n++<8)rush.step(M.IN.R);assert(rush.dead,'blind rush must get hit');assert(n<=4,'fast strike, not slow falling');
+ const bait=new M.World(M.parseRows(L[2].rows));bait.x=6*M.T-M.PW-129;bait.y=4*M.T-M.PH;bait.grounded=true;bait.vx=M.SPEED;bait.step(M.IN.R);for(let i=0;i<8;i++)bait.step(0);assert(!bait.dead);assert.equal(bait.blocks[0].st,2,'stop at known trigger edge; stone settles rapidly');
+ const landed=new M.World(M.parseRows(L[2].rows));landed.x=6*M.T+100;landed.y=4*M.T-M.PH;landed.grounded=true;landed.blocks[0].st=1;landed.blocks[0].y=3*M.T;landed.blocks[0].vy=768;landed.step(0);assert(landed.dead&&landed.blocks[0].st===2,'landing impact still hurts, no tunneling');
+ const old=M.decodeSnapshot(require('./v4_snapshot_fixture.json'));assert(M.simulate(old.map,old.inputs).result==='win');
+ const v5=M.decodeSnapshot(require('./v5_snapshot_fixture.json'));const w=new M.World(v5.map);w.x=6*M.T-M.PW+120;w.y=4*M.T-M.PH;w.grounded=true;w.step(0);assert.equal(w.blocks[0].st,4);for(let i=0;i<M.BLOCK_WARN-1;i++){w.step(0);assert.equal(w.blocks[0].st,4)}w.step(0);assert.equal(w.blocks[0].st,1,'legacy v5 retains warning timing');
+ console.log('PASS: blind rush hit in <=4 ticks; known edge bait survives; full route clears; swept landing impact; v4/v5 compatibility');
 }module.exports={run};
