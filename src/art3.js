@@ -5,11 +5,11 @@ var ART3 = (function () {
   var heroImg = new Image(), heroLoaded = false, heroTint = null;
   var HERO_FRAMES = [[127, 28, 137, 323], [482, 20, 142, 331], [844, 28, 139, 323], [1206, 29, 140, 322], [68, 391, 242, 297], [461, 380, 180, 293], [774, 396, 249, 293], [1182, 390, 184, 293], [73, 731, 217, 258], [427, 736, 211, 309], [823, 775, 165, 298], [1191, 791, 165, 282]];
   // Continuous run cycle; both feet alternate stance and swing. Source atlas stays unchanged.
-  var RUN_REACH = 72, HERO_UNIT = 1.55 / 192 * (176 / 331);
+  var RUN_REACH = 118, HERO_UNIT = 1.55 / 192 * (176 / 331);
   function drawRunner(g, source, unit, o) {
     var phase = o.runPhase === undefined ? (o.f || 0) * Math.PI / 6 : o.runPhase;
     var cycle = ((phase / (Math.PI * 2)) % 1 + 1) % 1;
-    var bob = -Math.cos(phase * 2) * 2, hipY = -115 + bob, shoulderY = -207 + bob;
+    var bob = -Math.cos(phase * 2) * 3, hipY = -115 + bob, shoulderY = -207 + bob;
     var front = o.tint ? '#a8b8f5' : '#000000', back = o.tint ? '#7888ba' : '#242424';
     g.save(); g.translate(0, o.bodyH / 2); g.scale(unit, unit);
     g.lineCap = 'round'; g.lineJoin = 'round';
@@ -21,21 +21,21 @@ var ART3 = (function () {
       u = (u % 1 + 1) % 1;
       if (u < 0.5) return { x: RUN_REACH * (1 - 4 * u), y: 0 };
       var v = (u - 0.5) * 2;
-      return { x: RUN_REACH * (-1 + 2 * v), y: -50 * Math.sin(Math.PI * v) };
+      return { x: RUN_REACH * (-1 + 2 * v), y: -82 * Math.sin(Math.PI * v) };
     }
     function leg(u, color) {
       var foot = footPose(u), dx = foot.x, dy = foot.y - hipY;
       var distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-      var bend = Math.sqrt(Math.max(0, 70 * 70 - distance * distance / 4));
+      var bend = Math.sqrt(Math.max(0, 86 * 86 - distance * distance / 4));
       var kneeX = dx / 2 + dy / distance * bend;
       var kneeY = hipY + dy / 2 - dx / distance * bend;
       line([0, hipY, kneeX, kneeY], 25, color); line([kneeX, kneeY, foot.x, foot.y - 7], 21, color);
       g.fillStyle = color; g.beginPath(); g.ellipse(foot.x + 7, foot.y - 7, 20, 7, 0, 0, Math.PI * 2); g.fill();
     }
     function arm(u, color) {
-      var swing = Math.cos(u * Math.PI * 2), wristX = 12 - swing * 54;
+      var swing = Math.cos(u * Math.PI * 2), wristX = 12 - swing * 76;
       var wristY = shoulderY + 55 - Math.abs(swing) * 8;
-      line([12, shoulderY, 12 - swing * 23, shoulderY + 36, wristX, wristY], 20, color);
+      line([12, shoulderY, 12 - swing * 34, shoulderY + 36, wristX, wristY], 20, color);
       g.fillStyle = color; g.beginPath(); g.ellipse(wristX, wristY, 12, 14, 0, 0, Math.PI * 2); g.fill();
     }
     arm(cycle + 0.5, back); leg(cycle + 0.5, back);
