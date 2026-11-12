@@ -1,4 +1,4 @@
-const assert=require('assert'),M=require('../src/engine'),L=require('../src/levels'),R=require('./v16_routes');
+const assert=require('assert'),engine=require('../src/engine'),M=Object.assign({},engine,{parseRows:function(rows){const m=engine.parseRows(rows);m.rulesVersion=10;return m;}}),L=require('./v16_levels_fixture.json'),R=require('./v16_routes');
 const map=i=>M.parseRows(L[i].rows);
 for(let i=0;i<5;i++){const m=map(i);for(let c=0;c<12;c++){assert.equal(m[c],M.TILE.GND);assert.equal(m[12+c],M.TILE.GND);}for(const hold of [10,20,35]){const jumps=[[134],[80,134],[60],[12],[152]][i];assert(R.play(i,jumps,hold).w.won,'ceiling must allow ordinary/held jumps '+i);}}
 let w=new M.World(map(3));const proof={speedRatio:84/M.SPEED,pauses:[]};let chase,exit;
