@@ -5,7 +5,7 @@ var ART3 = (function () {
   var heroImg = new Image(), heroLoaded = false, heroTint = null;
   var HERO_FRAMES = [[127, 28, 137, 323], [482, 20, 142, 331], [844, 28, 139, 323], [1206, 29, 140, 322], [68, 391, 242, 297], [461, 380, 180, 293], [774, 396, 249, 293], [1182, 390, 184, 293], [73, 731, 217, 258], [427, 736, 211, 309], [823, 775, 165, 298], [1191, 791, 165, 282]];
   // Continuous run cycle; both feet alternate stance and swing. Source atlas stays unchanged.
-  var RUN_REACH = 118, HERO_UNIT = 1.55 / 192 * (176 / 331);
+  var RUN_REACH = 118, RUN_LEAN = 0.42, HERO_UNIT = 1.55 / 192 * (176 / 331);
   function drawRunner(g, source, unit, o) {
     var phase = o.runPhase === undefined ? (o.f || 0) * Math.PI / 6 : o.runPhase;
     var cycle = ((phase / (Math.PI * 2)) % 1 + 1) % 1;
@@ -38,11 +38,19 @@ var ART3 = (function () {
       line([12, shoulderY, 12 - swing * 34, shoulderY + 36, wristX, wristY], 20, color);
       g.fillStyle = color; g.beginPath(); g.ellipse(wristX, wristY, 12, 14, 0, 0, Math.PI * 2); g.fill();
     }
-    arm(cycle + 0.5, back); leg(cycle + 0.5, back);
-    line([12, -218 + bob, 0, hipY], 46, front);
-    leg(cycle, front); arm(cycle, front);
-    // Use the approved image's exact face; do not redraw or regenerate its eyes.
-    g.drawImage(source, 1206, 29, 140, 94, -52, -306 + bob, 140, 94);
+    function upperBody(draw) {
+      g.save(); g.translate(0, hipY); g.rotate(RUN_LEAN); g.translate(0, -hipY); draw(); g.restore();
+    }
+    // Lean from the hips, leaving the feet and their ground contact untouched.
+    upperBody(function () { arm(cycle + 0.5, back); }); leg(cycle + 0.5, back);
+    upperBody(function () { line([12, -218 + bob, 0, hipY], 46, front); });
+    leg(cycle, front);
+    upperBody(function () {
+      arm(cycle, front);
+      // Head follows the forward-shifted shoulders; counter-rotation keeps the gaze ahead.
+      g.save(); g.translate(18, -259 + bob); g.rotate(-RUN_LEAN * 0.75);
+      g.drawImage(source, 1206, 29, 140, 94, -70, -47, 140, 94); g.restore();
+    });
     g.restore();
   }
   var img = new Image(), bg = new Image(), ok = 0, R = ATLAS.r, O = ATLAS.o, N = ATLAS.n, B = ATLAS.bear.body, cache = {};
