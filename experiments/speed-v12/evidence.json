@@ -1,0 +1,120 @@
+{
+  "version": 12,
+  "runSpeed": 86,
+  "pitWidthsPerSecond": 5.0390625,
+  "rooms": [
+    {
+      "room": 1,
+      "frames": 106,
+      "jumps": [
+        75
+      ],
+      "successfulShiftTicks": [
+        -8,
+        -6,
+        -4,
+        -2,
+        0,
+        2,
+        4,
+        6,
+        8
+      ],
+      "blind": "dead",
+      "delayedReaction": "dead",
+      "snapshotBytes": 115
+    },
+    {
+      "room": 2,
+      "frames": 114,
+      "jumps": [
+        51,
+        87
+      ],
+      "successfulShiftTicks": [
+        -8,
+        -6,
+        -4,
+        -2,
+        0,
+        2,
+        4,
+        6,
+        8
+      ],
+      "blind": "dead",
+      "delayedReaction": "dead",
+      "snapshotBytes": 119
+    },
+    {
+      "room": 3,
+      "frames": 82,
+      "jumps": [
+        47
+      ],
+      "successfulShiftTicks": [
+        -8,
+        -6,
+        -4,
+        -2,
+        0,
+        2,
+        4,
+        6,
+        8
+      ],
+      "blind": "dead",
+      "delayedReaction": "dead",
+      "snapshotBytes": 115
+    },
+    {
+      "room": 4,
+      "frames": 106,
+      "jumps": [
+        9
+      ],
+      "successfulShiftTicks": [
+        -8,
+        -6,
+        -4,
+        -2,
+        0,
+        2,
+        4,
+        6,
+        8
+      ],
+      "blind": "dead",
+      "delayedReaction": "dead",
+      "snapshotBytes": 112
+    },
+    {
+      "room": 5,
+      "frames": 130,
+      "jumps": [
+        103
+      ],
+      "successfulShiftTicks": [
+        -8,
+        -6,
+        -4,
+        -2,
+        0,
+        2,
+        4,
+        6,
+        8
+      ],
+      "blind": "dead",
+      "delayedReaction": "dead",
+      "snapshotBytes": 116
+    }
+  ],
+  "reuse": [
+    true,
+    true,
+    true,
+    true,
+    true
+  ]
+}

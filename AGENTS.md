@@ -43,3 +43,7 @@ v15采用接近开坑OPEN、SHIFT向左平移、CHASE按后续位置启动扩张
 ## 关卡蒸馏技能
 
 用户要求今后先研究原游戏，再生成我们的关卡。执行相关任务前读取 `.agents/skills/level-design-distillation/SKILL.md`，按证据、比例、机制关联和成对验证流程执行。黑色火柴人已确定为主角。v18为视觉比例试玩，碰撞盒和跑速仍为v17规则，不得写成已完成原作物理比例校准。
+
+## v12 跑速实验限制
+
+86单位/tick为仅在 `experiments/speed-v12/` 中验证的候选；不能当作已发布或适用于所有机关。五关和部分平移布局可通关，但落石原知情路线在高速下失败，宽余量新解仍未验证。详见 `.agents/skills/level-design-distillation/SKILL.md`。生产代码保持v11直至全机关和兼容验证通过。
