@@ -51,12 +51,15 @@ var ART3 = (function () {
     upperBody(function () { arm(cycle + 0.5, back); }); leg(cycle + 0.5, back);
     upperBody(function () { line([12, -218 + bob, 0, hipY], 46, front); });
     leg(cycle, front);
-    upperBody(function () {
-      arm(cycle, front);
-      // Head follows the forward-shifted shoulders; counter-rotation keeps the gaze ahead.
-      g.save(); g.translate(18, -259 + bob); g.rotate(-RUN_LEAN * 0.75);
-      g.drawImage(source, 1206, 29, 140, 94, -70, -47, 140, 94); g.restore();
-    });
+    upperBody(function () { arm(cycle, front); });
+    // Keep the neck and head upright in world space while the torso leans forward.
+    var cosLean = Math.cos(RUN_LEAN), sinLean = Math.sin(RUN_LEAN);
+    var neckX = 12 * cosLean + 103 * sinLean;
+    var neckY = hipY + 12 * sinLean - 103 * cosLean;
+    var headX = 18 * cosLean + 144 * sinLean - 8;
+    var headY = hipY + 18 * sinLean - 144 * cosLean - 30;
+    line([neckX, neckY, headX - 8, headY + 42], 24, front);
+    g.drawImage(source, 1206, 29, 140, 94, headX - 70, headY - 47, 140, 94);
     g.restore();
   }
   var img = new Image(), bg = new Image(), ok = 0, R = ATLAS.r, O = ATLAS.o, N = ATLAS.n, B = ATLAS.bear.body, cache = {};
