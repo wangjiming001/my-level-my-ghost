@@ -33,10 +33,16 @@ var ART3 = (function () {
       g.fillStyle = color; g.beginPath(); g.ellipse(foot.x + 7, foot.y - 7, 20, 7, 0, 0, Math.PI * 2); g.fill();
     }
     function arm(u, color) {
-      var swing = Math.cos(u * Math.PI * 2), wristX = 12 - swing * 76;
-      var wristY = shoulderY + 55 - Math.abs(swing) * 8;
-      line([12, shoulderY, 12 - swing * 34, shoulderY + 36, wristX, wristY], 20, color);
-      g.fillStyle = color; g.beginPath(); g.ellipse(wristX, wristY, 12, 14, 0, 0, Math.PI * 2); g.fill();
+      var swing = -Math.cos(u * Math.PI * 2), dx = swing * 110, dy = 38 - swing * 48;
+      var distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      var bend = Math.sqrt(Math.max(0, 75 * 75 - distance * distance / 4));
+      var elbowX = 12 + dx / 2 - dy / distance * bend;
+      var elbowY = shoulderY + dy / 2 + dx / distance * bend;
+      var wristX = 12 + dx, wristY = shoulderY + dy;
+      // Fixed-length upper arm and forearm: the elbow folds as the hand pumps forward/up and back.
+      line([12, shoulderY, elbowX, elbowY], 20, color);
+      line([elbowX, elbowY, wristX, wristY], 18, color);
+      g.fillStyle = color; g.beginPath(); g.ellipse(wristX, wristY, 13, 15, 0, 0, Math.PI * 2); g.fill();
     }
     function upperBody(draw) {
       g.save(); g.translate(0, hipY); g.rotate(RUN_LEAN); g.translate(0, -hipY); draw(); g.restore();
