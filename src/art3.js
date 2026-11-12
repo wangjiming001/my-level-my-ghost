@@ -1,15 +1,16 @@
-/* Original procedural stickman concept 06 + environment art: Pixel Adventure 1 (Pixel Frog, CC0) packed into one atlas (see CREDITS).
-   A few Kenney emotes/faces remain for death-comedy overlays. Render-only. */
+/* User-reference black silhouette hero: AI-generated 12-frame transparent atlas.
+   Environment: Pixel Adventure 1 (Pixel Frog, CC0); old vector hero remains a load-error fallback. */
 var ART3 = (function () {
   'use strict';
   var heroImg = new Image(), heroLoaded = false, heroTint = null;
+  var HERO_FRAMES = [[127, 28, 137, 323], [482, 20, 142, 331], [844, 28, 139, 323], [1206, 29, 140, 322], [68, 391, 242, 297], [461, 380, 180, 293], [774, 396, 249, 293], [1182, 390, 184, 293], [73, 731, 217, 258], [427, 736, 211, 309], [823, 775, 165, 298], [1191, 791, 165, 282]];
   var img = new Image(), bg = new Image(), ok = 0, R = ATLAS.r, O = ATLAS.o, N = ATLAS.n, B = ATLAS.bear.body, cache = {};
   function ready(cb) {
     function done() { if (++ok === 3) cb(); }
     img.onload = done; bg.onload = done;
     heroImg.onload = function () { heroLoaded = true; done(); };
     heroImg.onerror = function () { done(); };
-    heroImg.src = './assets/hero06.png';
+    heroImg.src = './assets/hero_black.png';
     img.src = ATLAS.atlasSrc || ATLAS.img || './assets/atlas.png';
     bg.src = ATLAS.bgSrc || ATLAS.bg || './assets/bg.jpg';
   }
@@ -121,19 +122,20 @@ var ART3 = (function () {
       var source = heroImg;
       if (o.tint) {
         if (!heroTint) {
-          heroTint = document.createElement('canvas'); heroTint.width = 768; heroTint.height = 576;
+          heroTint = document.createElement('canvas'); heroTint.width = heroImg.width; heroTint.height = heroImg.height;
           var tc = heroTint.getContext('2d'); tc.drawImage(heroImg, 0, 0);
-          tc.globalCompositeOperation = 'source-atop'; tc.fillStyle = '#a8b8f5'; tc.fillRect(0, 0, 768, 576);
+          tc.globalCompositeOperation = 'source-atop'; tc.globalAlpha = 0.7; tc.fillStyle = '#a8b8f5'; tc.fillRect(0, 0, heroTint.width, heroTint.height);
         }
         source = heroTint;
       }
-      var height = h * 1.55, width = height;
+      var frame = HERO_FRAMES[index], unit = h * 1.55 / 192 * (176 / 331);
+      var height = frame[3] * unit, width = frame[2] * unit;
       g.save(); g.globalAlpha = o.alpha === undefined ? 1 : o.alpha;
       g.translate(x + w / 2, y + h / 2);
       if (o.rot) g.rotate(o.rot);
       g.scale((o.flip ? -1 : 1) * (o.sx || 1), o.sy || 1);
       g.imageSmoothingEnabled = true;
-      g.drawImage(source, (index % 4) * 192, Math.floor(index / 4) * 192, 192, 192, -width / 2, h / 2 - height * 184 / 192, width, height);
+      g.drawImage(source, frame[0], frame[1], frame[2], frame[3], -width / 2, h / 2 - height, width, height);
       g.restore();
     },
     emote: function (g, name, cx, by, w, alpha) { g.globalAlpha = alpha === undefined ? 1 : alpha; sprFit(g, 'emo_' + name, cx, by, w); g.globalAlpha = 1; },
