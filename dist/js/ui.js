@@ -752,7 +752,7 @@
   $('pBack').onclick = function () { var g = game; game = null; clearInput();
     if (editor.on) { editor.on = false; show('sMenu'); } else if (g && g.mode === 'record') openEditor(); else if (g && g.mode === 'demo') { buildLevels(); show('sLevels'); } else show('sMenu'); };
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
-    startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: 'v17抬头跑 · ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
+    startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: 'v17协调跑姿 · ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
     LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v11_layout_v17_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';

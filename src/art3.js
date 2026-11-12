@@ -4,12 +4,30 @@ var ART3 = (function () {
   'use strict';
   var heroImg = new Image(), heroLoaded = false, heroTint = null;
   var HERO_FRAMES = [[127, 28, 137, 323], [482, 20, 142, 331], [844, 28, 139, 323], [1206, 29, 140, 322], [68, 391, 242, 297], [461, 380, 180, 293], [774, 396, 249, 293], [1182, 390, 184, 293], [73, 731, 217, 258], [427, 736, 211, 309], [823, 775, 165, 298], [1191, 791, 165, 282]];
-  // Continuous run cycle; both feet alternate stance and swing. Source atlas stays unchanged.
-  var RUN_REACH = 118, RUN_LEAN = 0.42, HERO_UNIT = 1.55 / 192 * (176 / 331);
+  // Complete 8-pose gait, studied from RGS_Dev's CC0 Run preview on itch.io.
+  // Retargeted to our long-limbed black hero; no reference pixels are included.
+  var HERO_UNIT = 1.55 / 192 * (176 / 331), RUN_CONTACT_REACH = 72;
+  var RUN_FEET = [[-72,0],[-136,-72],[-70,-100],[0,-86],[105,-50],[136,-72],[72,0],[0,0]];
+  var RUN_HANDS = [[-82,48],[-88,26],[-56,54],[0,48],[82,20],[96,-12],[78,12],[28,40]];
+  var RUN_HIPS = [-118,-136,-118,-104,-118,-136,-118,-104];
+  var RUN_LEANS = [0.29,0.32,0.28,0.24,0.29,0.32,0.28,0.24];
+  function runSample(values, u, component, linear) {
+    var phase = ((u % 1 + 1) % 1) * 8, i = Math.floor(phase), t = phase - i;
+    function at(index) { var v = values[(index + 8) % 8]; return component === undefined ? v : v[component]; }
+    var b = at(i), c = at(i + 1);
+    if (linear) return b + (c - b) * t;
+    var a = at(i - 1), d = at(i + 2);
+    return 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+  }
+  function runPose(phase) {
+    var u = phase / (Math.PI * 2);
+    function foot(p) { return { x: runSample(RUN_FEET,p,0,true), y: Math.min(0,runSample(RUN_FEET,p,1,false)) }; }
+    function hand(p) { return { x: runSample(RUN_HANDS,p,0,false), y: runSample(RUN_HANDS,p,1,false) }; }
+    return { hipY:runSample(RUN_HIPS,u), lean:runSample(RUN_LEANS,u), feet:[foot(u),foot(u+0.5)], hands:[hand(u+0.5),hand(u)] };
+  }
   function drawRunner(g, source, unit, o) {
     var phase = o.runPhase === undefined ? (o.f || 0) * Math.PI / 6 : o.runPhase;
-    var cycle = ((phase / (Math.PI * 2)) % 1 + 1) % 1;
-    var bob = -Math.cos(phase * 2) * 3, hipY = -115 + bob, shoulderY = -207 + bob;
+    var pose = runPose(phase), hipY = pose.hipY, shoulderY = hipY - 92;
     var front = o.tint ? '#a8b8f5' : '#000000', back = o.tint ? '#7888ba' : '#242424';
     g.save(); g.translate(0, o.bodyH / 2); g.scale(unit, unit);
     g.lineCap = 'round'; g.lineJoin = 'round';
@@ -17,14 +35,8 @@ var ART3 = (function () {
       g.strokeStyle = color; g.lineWidth = width; g.beginPath(); g.moveTo(points[0], points[1]);
       for (var j = 2; j < points.length; j += 2) g.lineTo(points[j], points[j + 1]); g.stroke();
     }
-    function footPose(u) {
-      u = (u % 1 + 1) % 1;
-      if (u < 0.5) return { x: RUN_REACH * (1 - 4 * u), y: 0 };
-      var v = (u - 0.5) * 2;
-      return { x: RUN_REACH * (-1 + 2 * v), y: -82 * Math.sin(Math.PI * v) };
-    }
-    function leg(u, color) {
-      var foot = footPose(u), dx = foot.x, dy = foot.y - hipY;
+    function leg(foot, color) {
+      var dx = foot.x, dy = foot.y - hipY;
       var distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
       var bend = Math.sqrt(Math.max(0, 86 * 86 - distance * distance / 4));
       var kneeX = dx / 2 + dy / distance * bend;
@@ -32,32 +44,27 @@ var ART3 = (function () {
       line([0, hipY, kneeX, kneeY], 25, color); line([kneeX, kneeY, foot.x, foot.y - 7], 21, color);
       g.fillStyle = color; g.beginPath(); g.ellipse(foot.x + 7, foot.y - 7, 20, 7, 0, 0, Math.PI * 2); g.fill();
     }
-    function arm(u, color) {
-      var swing = -Math.cos(u * Math.PI * 2), dx = swing * 110, dy = 38 - swing * 48;
-      var distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-      var bend = Math.sqrt(Math.max(0, 75 * 75 - distance * distance / 4));
+    function arm(hand, color) {
+      var dx = hand.x, dy = hand.y, distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      var bend = Math.sqrt(Math.max(0, 65 * 65 - distance * distance / 4));
       var elbowX = 12 + dx / 2 - dy / distance * bend;
       var elbowY = shoulderY + dy / 2 + dx / distance * bend;
       var wristX = 12 + dx, wristY = shoulderY + dy;
-      // Fixed-length upper arm and forearm: the elbow folds as the hand pumps forward/up and back.
       line([12, shoulderY, elbowX, elbowY], 20, color);
       line([elbowX, elbowY, wristX, wristY], 18, color);
       g.fillStyle = color; g.beginPath(); g.ellipse(wristX, wristY, 13, 15, 0, 0, Math.PI * 2); g.fill();
     }
     function upperBody(draw) {
-      g.save(); g.translate(0, hipY); g.rotate(RUN_LEAN); g.translate(0, -hipY); draw(); g.restore();
+      g.save(); g.translate(0, hipY); g.rotate(pose.lean); g.translate(0, -hipY); draw(); g.restore();
     }
-    // Lean from the hips, leaving the feet and their ground contact untouched.
-    upperBody(function () { arm(cycle + 0.5, back); }); leg(cycle + 0.5, back);
-    upperBody(function () { line([12, -218 + bob, 0, hipY], 46, front); });
-    leg(cycle, front);
-    upperBody(function () { arm(cycle, front); });
-    // Keep the neck and head upright in world space while the torso leans forward.
-    var cosLean = Math.cos(RUN_LEAN), sinLean = Math.sin(RUN_LEAN);
+    upperBody(function () { arm(pose.hands[1], back); }); leg(pose.feet[1], back);
+    upperBody(function () { line([12, hipY - 103, 0, hipY], 46, front); });
+    leg(pose.feet[0], front); upperBody(function () { arm(pose.hands[0], front); });
+    // Head stabilization counters some impact bob; the neck remains visible, gaze stays level.
+    var cosLean = Math.cos(pose.lean), sinLean = Math.sin(pose.lean);
     var neckX = 12 * cosLean + 103 * sinLean;
     var neckY = hipY + 12 * sinLean - 103 * cosLean;
-    var headX = 18 * cosLean + 144 * sinLean - 8;
-    var headY = hipY + 18 * sinLean - 144 * cosLean - 30;
+    var headX = neckX + 10, headY = -278 + (hipY + 118) * 0.45;
     line([neckX, neckY, headX - 8, headY + 42], 24, front);
     g.drawImage(source, 1206, 29, 140, 94, headX - 70, headY - 47, 140, 94);
     g.restore();
@@ -167,7 +174,8 @@ var ART3 = (function () {
       }
       g.restore(); g.restore();
     },
-    runStride: function (bodyHeight) { return 4 * RUN_REACH * bodyHeight * HERO_UNIT; },
+    runPose: runPose,
+    runStride: function (bodyHeight) { return 8 * RUN_CONTACT_REACH * bodyHeight * HERO_UNIT; },
     // Image frames preserve the approved artwork; transforms remain render-only.
     bear: function (g, x, y, w, h, o) {
       o = o || {};
