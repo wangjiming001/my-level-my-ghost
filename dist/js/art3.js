@@ -1,11 +1,81 @@
-/* v4 art: Pixel Adventure 1 (Pixel Frog, CC0) packed into one atlas (see CREDITS).
-   A few Kenney emotes/faces remain for death-comedy overlays. Render-only. */
+/* User-reference black silhouette hero: AI-generated 12-frame transparent atlas.
+   Environment: Pixel Adventure 1 (Pixel Frog, CC0); old vector hero remains a load-error fallback. */
 var ART3 = (function () {
   'use strict';
+  var heroImg = new Image(), heroLoaded = false, heroTint = null;
+  var HERO_FRAMES = [[127, 28, 137, 323], [482, 20, 142, 331], [844, 28, 139, 323], [1206, 29, 140, 322], [68, 391, 242, 297], [461, 380, 180, 293], [774, 396, 249, 293], [1182, 390, 184, 293], [73, 731, 217, 258], [427, 736, 211, 309], [823, 775, 165, 298], [1191, 791, 165, 282]];
+  // Complete 8-pose gait, studied from RGS_Dev's CC0 Run preview on itch.io.
+  // Retargeted to our long-limbed black hero; no reference pixels are included.
+  var HERO_UNIT = 1.55 / 192 * (176 / 331), RUN_CONTACT_REACH = 72;
+  var RUN_FEET = [[-72,0],[-136,-72],[-70,-100],[0,-86],[105,-50],[136,-72],[72,0],[0,0]];
+  var RUN_HANDS = [[-82,48],[-88,26],[-56,54],[0,48],[82,20],[96,-12],[78,12],[28,40]];
+  var RUN_HIPS = [-118,-136,-118,-104,-118,-136,-118,-104];
+  var RUN_LEANS = [0.29,0.32,0.28,0.24,0.29,0.32,0.28,0.24];
+  function runSample(values, u, component, linear) {
+    var phase = ((u % 1 + 1) % 1) * 8, i = Math.floor(phase), t = phase - i;
+    function at(index) { var v = values[(index + 8) % 8]; return component === undefined ? v : v[component]; }
+    var b = at(i), c = at(i + 1);
+    if (linear) return b + (c - b) * t;
+    var a = at(i - 1), d = at(i + 2);
+    return 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+  }
+  function runPose(phase) {
+    var u = phase / (Math.PI * 2);
+    function foot(p) { return { x: runSample(RUN_FEET,p,0,true), y: Math.min(0,runSample(RUN_FEET,p,1,false)) }; }
+    function hand(p) { return { x: runSample(RUN_HANDS,p,0,false), y: runSample(RUN_HANDS,p,1,false) }; }
+    return { hipY:runSample(RUN_HIPS,u), lean:runSample(RUN_LEANS,u), feet:[foot(u),foot(u+0.5)], hands:[hand(u+0.5),hand(u)] };
+  }
+  function drawRunner(g, source, unit, o) {
+    var phase = o.runPhase === undefined ? (o.f || 0) * Math.PI / 6 : o.runPhase;
+    var pose = runPose(phase), hipY = pose.hipY, shoulderY = hipY - 92;
+    var front = o.tint ? '#a8b8f5' : '#000000', back = o.tint ? '#7888ba' : '#242424';
+    g.save(); g.translate(0, o.bodyH / 2); g.scale(unit, unit);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    function line(points, width, color) {
+      g.strokeStyle = color; g.lineWidth = width; g.beginPath(); g.moveTo(points[0], points[1]);
+      for (var j = 2; j < points.length; j += 2) g.lineTo(points[j], points[j + 1]); g.stroke();
+    }
+    function leg(foot, color) {
+      var dx = foot.x, dy = foot.y - hipY;
+      var distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      var bend = Math.sqrt(Math.max(0, 86 * 86 - distance * distance / 4));
+      var kneeX = dx / 2 + dy / distance * bend;
+      var kneeY = hipY + dy / 2 - dx / distance * bend;
+      line([0, hipY, kneeX, kneeY], 25, color); line([kneeX, kneeY, foot.x, foot.y - 7], 21, color);
+      g.fillStyle = color; g.beginPath(); g.ellipse(foot.x + 7, foot.y - 7, 20, 7, 0, 0, Math.PI * 2); g.fill();
+    }
+    function arm(hand, color) {
+      var dx = hand.x, dy = hand.y, distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      var bend = Math.sqrt(Math.max(0, 65 * 65 - distance * distance / 4));
+      var elbowX = 12 + dx / 2 - dy / distance * bend;
+      var elbowY = shoulderY + dy / 2 + dx / distance * bend;
+      var wristX = 12 + dx, wristY = shoulderY + dy;
+      line([12, shoulderY, elbowX, elbowY], 20, color);
+      line([elbowX, elbowY, wristX, wristY], 18, color);
+      g.fillStyle = color; g.beginPath(); g.ellipse(wristX, wristY, 13, 15, 0, 0, Math.PI * 2); g.fill();
+    }
+    function upperBody(draw) {
+      g.save(); g.translate(0, hipY); g.rotate(pose.lean); g.translate(0, -hipY); draw(); g.restore();
+    }
+    upperBody(function () { arm(pose.hands[1], back); }); leg(pose.feet[1], back);
+    upperBody(function () { line([12, hipY - 103, 0, hipY], 46, front); });
+    leg(pose.feet[0], front); upperBody(function () { arm(pose.hands[0], front); });
+    // Head stabilization counters some impact bob; the neck remains visible, gaze stays level.
+    var cosLean = Math.cos(pose.lean), sinLean = Math.sin(pose.lean);
+    var neckX = 12 * cosLean + 103 * sinLean;
+    var neckY = hipY + 12 * sinLean - 103 * cosLean;
+    var headX = neckX + 10, headY = -278 + (hipY + 118) * 0.45;
+    line([neckX, neckY, headX - 8, headY + 42], 24, front);
+    g.drawImage(source, 1206, 29, 140, 94, headX - 70, headY - 47, 140, 94);
+    g.restore();
+  }
   var img = new Image(), bg = new Image(), ok = 0, R = ATLAS.r, O = ATLAS.o, N = ATLAS.n, B = ATLAS.bear.body, cache = {};
   function ready(cb) {
-    function done() { if (++ok === 2) cb(); }
+    function done() { if (++ok === 3) cb(); }
     img.onload = done; bg.onload = done;
+    heroImg.onload = function () { heroLoaded = true; done(); };
+    heroImg.onerror = function () { done(); };
+    heroImg.src = './assets/hero_black.png';
     img.src = ATLAS.atlasSrc || ATLAS.img || './assets/atlas.png';
     bg.src = ATLAS.bgSrc || ATLAS.bg || './assets/bg.jpg';
   }
@@ -46,17 +116,94 @@ var ART3 = (function () {
     start: function (g, x, y, s) {
       g.globalAlpha = 0.95; sprFit(g, 'start', x + s * 0.5, y + s, s * 0.7); g.globalAlpha = 1;
     },
-    // Mask Dude in hitbox (x,y,w,h px). o: {anim, f, flip, alpha, tint, rot, sx, sy}
+    // Original concept 06: cheeky stickman. Rendering only; hitbox/physics unchanged.
+    bearVector: function (g, x, y, w, h, o) {
+      o = o || {};
+      var anim = o.anim || 'idle', f = o.f || 0, shocked = anim === 'dead' || anim === 'dizzy';
+      var running = anim === 'run', airborne = anim === 'up' || anim === 'fall';
+      var swing = running ? Math.sin(f * Math.PI / 6) : 0;
+      var bob = running ? Math.abs(Math.sin(f * Math.PI / 6)) * 3 : Math.sin(f * 0.4) * 1.2;
+      var color = o.tint ? '#6b729e' : '#252935', face = o.tint ? '#e0e5ff' : '#fffdf8';
+      g.save(); g.globalAlpha = o.alpha === undefined ? 1 : o.alpha;
+      g.translate(x + w / 2, y + h / 2);
+      if (o.rot) g.rotate(o.rot);
+      g.scale((o.flip ? -1 : 1) * (o.sx || 1) * w / 78, (o.sy || 1) * h / 120);
+      g.translate(0, 60);
+      g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 3.5; g.lineCap = 'round'; g.lineJoin = 'round';
+      function line(points) { g.beginPath(); g.moveTo(points[0], points[1]); for (var i = 2; i < points.length; i += 2) g.lineTo(points[i], points[i + 1]); g.stroke(); }
+      function oval(cx, cy, rx, ry, fill) { g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); g.stroke(); }
+      // Thin body, bent limbs and big feet. Feet stay anchored to the existing box.
+      line([0, -52 + bob, -3, -32, 0, -23]);
+      if (shocked) {
+        line([-2, -48, -25, -64, -36, -48]); line([2, -48, 27, -29, 35, -48]);
+        line([0, -23, -23, -12, -30, -24]); line([0, -23, 16, -11, 27, -1]);
+        oval(-32, -24, 8, 4, color); oval(29, -1, 9, 4, color);
+      } else if (running || airborne) {
+        line([0, -48 + bob, -16, -39 + swing * 12, -23, -53 + swing * 9]);
+        line([0, -48 + bob, 17, -37 - swing * 12, 24, -48 - swing * 9]);
+        line([0, -23, -15 + swing * 10, -12, -21 + swing * 17, -1 - Math.max(0, swing) * 8]);
+        line([0, -23, 14 - swing * 10, -12, 22 - swing * 17, -1 - Math.max(0, -swing) * 8]);
+        oval(-21 + swing * 17, -1 - Math.max(0, swing) * 8, 9, 3.5, color);
+        oval(22 - swing * 17, -1 - Math.max(0, -swing) * 8, 9, 3.5, color);
+      } else {
+        // Hands rubbing together, as in concept 06.
+        line([-2, -49, -20, -37, 5, -53]); line([2, -49, 17, -37, 5, -53]);
+        oval(5, -53, 5, 5, color);
+        line([0, -23, -16, -13, -22, -1]); line([0, -23, 17, -12, 24, -1]);
+        oval(-23, -1, 10, 3.8, color); oval(25, -1, 10, 3.8, color);
+      }
+      g.save(); g.translate(running ? 3 : 0, -83 + bob);
+      oval(0, 0, 32, 29, face);
+      // The signature bent hair, not a separate sprite.
+      line([-2, -29, 3, -39, -7, -46, 4, -49]);
+      if (shocked) {
+        oval(-13, -7, 12, 14, '#fff'); oval(13, -10, 13, 15, '#fff');
+        oval(-10, -5, 2.2, 3, color); oval(15, -7, 2.2, 3, color);
+        oval(4, 16, 8, 12, color);
+        g.save(); g.lineWidth = 1; oval(5, 22, 5, 4, '#f47b8e'); g.restore();
+        line([-25, -23, -15, -26]); line([7, -28, 19, -29]);
+      } else {
+        // Half-lidded side-eye, one raised brow, and a deliberately crooked grin.
+        g.fillStyle = '#fff'; g.beginPath(); g.moveTo(-26, -5); g.quadraticCurveTo(-12, 15, -1, -1); g.closePath(); g.fill(); g.stroke();
+        g.beginPath(); g.moveTo(4, -1); g.quadraticCurveTo(18, 10, 27, -10); g.closePath(); g.fill(); g.stroke();
+        oval(-7, 2, 2.5, 3, color); oval(20, -3, 2.5, 3, color);
+        line([-27, -15, -6, -8]);
+        g.beginPath(); g.moveTo(7, -17); g.quadraticCurveTo(17, -27, 26, -19); g.stroke();
+        g.fillStyle = '#fff'; g.beginPath(); g.moveTo(-7, 14); g.quadraticCurveTo(12, 24, 24, 7); g.quadraticCurveTo(15, 34, -7, 14); g.fill(); g.stroke();
+        g.lineWidth = 1.8; line([7, 20, 9, 25]); line([15, 17, 18, 22]);
+      }
+      g.restore(); g.restore();
+    },
+    runPose: runPose,
+    runStride: function (bodyHeight) { return 8 * RUN_CONTACT_REACH * bodyHeight * HERO_UNIT; },
+    // Image frames preserve the approved artwork; transforms remain render-only.
     bear: function (g, x, y, w, h, o) {
-      var anim = o.anim || 'idle', n = N[anim] || 1, fi = ((o.f || 0) % n + n) % n, name = anim + fi, r = R[name], off = O[name];
-      if (!r) { name = anim + '0'; r = R[name]; off = O[name]; }
-      if (!r) return;
-      // Fit slightly taller than the hitbox but still under a 1-tile walk-under gap (224/800 clearance).
-      var k = 1.08 * h / (B[3] - B[1]), cx = x + w / 2, by = y + h, bcx = (B[0] + B[2]) / 2;
-      g.save(); g.globalAlpha = o.alpha === undefined ? 1 : o.alpha; g.translate(cx, by - h / 2);
-      if (o.rot) g.rotate(o.rot); g.scale((o.flip ? -1 : 1) * (o.sx || 1), o.sy || 1); g.translate(0, h / 2);
-      var dx = (off[0] - bcx) * k, dy = (off[1] - B[3]) * k;
-      if (o.tint) g.drawImage(tinted(name, o.tint), dx, dy, r[2] * k, r[3] * k); else g.drawImage(img, r[0], r[1], r[2], r[3], dx, dy, r[2] * k, r[3] * k);
+      o = o || {};
+      if (!heroLoaded) return A.bearVector(g, x, y, w, h, o);
+      var anim = o.anim || 'idle', f = o.f || 0, index = Math.floor(f / 3) % 4;
+      if (anim === 'run') index = 4 + Math.floor(f / 2) % 4;
+      else if (anim === 'up') index = 8;
+      else if (anim === 'fall') index = 9;
+      else if (anim === 'dizzy') index = 10;
+      else if (anim === 'dead') index = 11;
+      var source = heroImg;
+      if (o.tint) {
+        if (!heroTint) {
+          heroTint = document.createElement('canvas'); heroTint.width = heroImg.width; heroTint.height = heroImg.height;
+          var tc = heroTint.getContext('2d'); tc.drawImage(heroImg, 0, 0);
+          tc.globalCompositeOperation = 'source-atop'; tc.globalAlpha = 0.7; tc.fillStyle = '#a8b8f5'; tc.fillRect(0, 0, heroTint.width, heroTint.height);
+        }
+        source = heroTint;
+      }
+      var frame = HERO_FRAMES[index], unit = h * 1.55 / 192 * (176 / 331);
+      var height = frame[3] * unit, width = frame[2] * unit;
+      g.save(); g.globalAlpha = o.alpha === undefined ? 1 : o.alpha;
+      g.translate(x + w / 2, y + h / 2);
+      if (o.rot) g.rotate(o.rot);
+      g.scale((o.flip ? -1 : 1) * (o.sx || 1), o.sy || 1);
+      g.imageSmoothingEnabled = true;
+      if (anim === 'run') { o.bodyH = h; drawRunner(g, source, unit, o); }
+      else g.drawImage(source, frame[0], frame[1], frame[2], frame[3], -width / 2, h / 2 - height, width, height);
       g.restore();
     },
     emote: function (g, name, cx, by, w, alpha) { g.globalAlpha = alpha === undefined ? 1 : alpha; sprFit(g, 'emo_' + name, cx, by, w); g.globalAlpha = 1; },

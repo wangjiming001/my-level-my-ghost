@@ -36,26 +36,53 @@
 
   // ---------------- canvas ----------------
   var cv = $('cv'), ctx = cv.getContext('2d'), cssW = 360, scale = 1, dpr = 1;
+  var viewCols = COLS, viewRows = ROWS, camX = 0, camY = 0;
   function resize() {
     var wrap = $('stageWrap'); cssW = Math.max(200, wrap.clientWidth - 12); dpr = Math.min(window.devicePixelRatio || 1, 3);
-    var cssH = Math.round(cssW * ROWS / COLS); cv.style.height = cssH + 'px'; cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); scale = cv.width / (COLS * T);
+    viewCols = COLS; viewRows = ROWS;
+    var cssH = Math.round(cssW * viewRows / viewCols); cv.style.height = cssH + 'px'; cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); scale = cv.width / (viewCols * T);
+  }
+  function applyCamera(w) {
+    camX = 0; camY = 0;
+    // The whole map stays fixed; character animation and reaction inset remain.
+  }
+  function drawReaction(g) {
+    if (!g.dseq || g.dseq.phase !== 'hit') return;
+    var size = Math.min(cssW * 0.3, 112) * dpr, px = cv.width - size - 10 * dpr, py = 10 * dpr;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#fff6e6'; ctx.strokeStyle = '#40312a'; ctx.lineWidth = 3 * dpr;
+    ctx.fillRect(px, py, size, size); ctx.strokeRect(px, py, size, size);
+    ctx.beginPath(); ctx.rect(px + 3 * dpr, py + 3 * dpr, size - 6 * dpr, size - 6 * dpr); ctx.clip();
+    ART3.bear(ctx, px + size * 0.03, py + size * 0.23, size * 0.94, size * 1.4, { anim: 'dizzy', f: g.dseq.t });
+    ctx.restore();
   }
   window.addEventListener('resize', resize);
   var goneAt = {}, popAt = {};
   function blockCell(map, k) { var n = 0; for (var i = 0; i < map.length; i++) if (map[i] === TL.FALL) { if (n === k) return i; n++; } return -1; }
   // view: 'play' (traps disguised) | 'edit' (traps marked) | 'card' (disguised except reveal{cell:true})
-  function solidLook(map, c, r) { if (c < 0 || c >= COLS) return true; if (r < 0 || r >= ROWS) return false; var t = map[r * COLS + c]; return t === TL.GND || t === TL.COL || t === TL.FALL || t === TL.TRM; }
+  function solidLook(map, c, r) { if (c < 0 || c >= COLS) return true; if (r < 0 || r >= ROWS) return false; var t = map[r * COLS + c]; return t === TL.GND || t === TL.COL || t === TL.FALL || t === TL.TRM || t === TL.SHIFT || t === TL.CHASE || t === TL.OPEN || t === TL.RELAY; }
   function variant(map, c, r) { if (solidLook(map, c, r - 1)) return 'D'; var l = solidLook(map, c - 1, r), rr = solidLook(map, c + 1, r), below = solidLook(map, c, r + 1);
     if (!l && !below) return 'L'; if (!rr && !below) return 'R'; return 'M'; }
   var crumbs = [];
   // view: 'play' (traps disguised) | 'edit' (traps marked) | 'card' (disguised except reveal{cell:true})
   function drawMap(g, map, sc, world, view, t, reveal) {
-    var s = T * sc, i, c, r, x, y, tt;
+    var s = T * sc, i, c, r, x, y, tt, ceilingRows = 0;
+    // Full solid rows at the top form a ceiling, using earth rather than an upward grass surface.
+    for (var crw = 0; crw < ROWS; crw++) {
+      var full = true; for (var ccw = 0; ccw < COLS; ccw++) if (map[crw * COLS + ccw] !== TL.GND) full = false;
+      if (!full) break; ceilingRows++;
+    }
     ART3.bg(g, COLS * s, ROWS * s, t);
+    // Conceal the empty shaft below an intact false floor during play/cards.
+    // It is decorative earth only; disappears with its supporting trap.
+    if (view !== 'edit') for (var ci = 0; ci < map.length; ci++) if (map[ci] === TL.COL && !(reveal && reveal[ci]) && (!world || world.collapse[ci] >= 0)) {
+      var cc = ci % COLS, cr = (ci / COLS) | 0;
+      for (var rr = cr + 1; rr < ROWS && map[rr * COLS + cc] === TL.E; rr++) ART3.tile(g, 'g', 'D', cc * s, rr * s, s);
+    }
     for (i = 0; i < map.length; i++) {
       tt = map[i]; c = i % COLS; r = (i / COLS) | 0; x = c * s; y = r * s;
       var rv = reveal && reveal[i], v = variant(map, c, r);
-      if (tt === TL.GND) ART3.tile(g, 'g', v, x, y, s);
+      if (tt === TL.GND || tt === TL.SHIFT || tt === TL.CHASE || tt === TL.OPEN || tt === TL.RELAY) ART3.tile(g, 'g', r < ceilingRows ? 'D' : v, x, y, s);
       else if (tt === TL.SPK) ART3.spike(g, x, y, s);
       else if (tt === TL.ST) { ART3.start(g, x, y, s); if (view === 'edit') ART3.bear(g, x + s * 0.19, y + s * 0.22, s * 0.62, s * 0.78, { anim: 'idle', alpha: 0.6 }); }
       else if (tt === TL.GL) ART3.goal(g, x, y, s, t);
@@ -72,27 +99,35 @@
         ART3.tramp(g, x, y, s, t, !!(world && world.sprung && world.grounded === false));
       }
     }
+    // Render the same exact moving intervals used by terrain collision.
+    var pits = world ? world.pits : null;
+    if (!pits) { pits = []; for (var pi = 0; pi < map.length; pi++) if (map[pi] === TL.SHIFT || map[pi] === TL.CHASE || map[pi] === TL.OPEN || map[pi] === TL.RELAY) { pits = new M.World(map).pits; break; } }
+    for (var pk = 0; pk < pits.length; pk++) { var pit = pits[pk];
+      if (pit.right > pit.left) { g.save(); g.beginPath(); g.rect(pit.left * sc, pit.row * s, (pit.right - pit.left) * sc, (ROWS - pit.row) * s); g.clip(); ART3.bg(g, COLS * s, ROWS * s, t); g.restore(); }
+      if (view === 'edit') { g.fillStyle = '#ff7026'; g.font = 'bold ' + Math.round(s * 0.45) + 'px sans-serif'; g.fillText(pit.kind === TL.SHIFT ? '←' : '↔', (pit.cell % COLS) * s, (pit.row + 0.7) * s); }
+    }
     if (world) for (var b = 0; b < world.blocks.length; b++) { var bl = world.blocks[b]; if (bl.st !== 3) { var bc = blockCell(map, b), bx = bl.c * s, byy = bl.y * sc;
       if (bl.st === 0 && view === 'play' && !(reveal && reveal[bc])) ART3.tile(g, 'g', variant(map, bl.c, (bc / COLS) | 0), bx, byy, s);
-      else { ART3.block(g, bx, byy, s); if (bl.st === 1) ART3.face(g, 'f', bx + s / 2, byy + s * 0.6, s * 0.55); else if (bl.st === 2) ART3.face(g, 'h', bx + s / 2, byy + s * 0.6, s * 0.55); } } }
+      else { ART3.block(g, bx + (bl.st === 4 ? Math.sin(bl.warn * 2) * s * 0.05 : 0), byy, s); if (bl.st === 4) ART3.emote(g, 'exclamation', bx + s / 2, byy, s * 0.4); if (bl.st === 1) ART3.face(g, 'f', bx + s / 2, byy + s * 0.6, s * 0.55); else if (bl.st === 2) ART3.face(g, 'h', bx + s / 2, byy + s * 0.6, s * 0.55); } } }
     else for (i = 0; i < map.length; i++) if (map[i] === TL.FALL) { c = i % COLS; r = (i / COLS) | 0;
       if (view === 'edit' || (reveal && reveal[i])) { ART3.block(g, c * s, r * s, s); ART3.face(g, 'f', c * s + s / 2, r * s + s * 0.6, s * 0.55); }
       else ART3.tile(g, 'g', variant(map, c, r), c * s, r * s, s); }
   }
 
   // ---------------- input ----------------
+  // A short tap produces 10 recorded jump ticks; holding still controls full height.
   var held = { L: false, R: false, J: false }, jLatch = 0;
   function anyPress() { if (game && game.dseq && game.dseq.phase !== 'hit') skipDeath(); }
   function bindBtn(id, key) {
     var el = $(id);
-    function down(e) { e.preventDefault(); if (!held[key] && key === 'J') jLatch = 2; held[key] = true; el.classList.add('down'); anyPress(); }
+    function down(e) { e.preventDefault(); if (!held[key] && key === 'J') jLatch = 10; held[key] = true; el.classList.add('down'); anyPress(); }
     function up(e) { e.preventDefault(); held[key] = false; el.classList.remove('down'); }
     el.addEventListener('touchstart', down, { passive: false }); el.addEventListener('touchend', up, { passive: false }); el.addEventListener('touchcancel', up, { passive: false });
     el.addEventListener('mousedown', down); el.addEventListener('mouseup', up); el.addEventListener('mouseleave', function (e) { if (held[key]) up(e); });
   }
   bindBtn('bL', 'L'); bindBtn('bR', 'R'); bindBtn('bJ', 'J');
   var KEYS = { ArrowLeft: 'L', a: 'L', A: 'L', ArrowRight: 'R', d: 'R', D: 'R', ' ': 'J', ArrowUp: 'J', w: 'J', W: 'J' };
-  document.addEventListener('keydown', function (e) { var k = KEYS[e.key]; if (k && game) { e.preventDefault(); if (e.repeat) return; if (k === 'J' && !held.J) jLatch = 2; held[k] = true; $('b' + k).classList.add('down'); anyPress(); } });
+  document.addEventListener('keydown', function (e) { var k = KEYS[e.key]; if (k && game) { e.preventDefault(); if (e.repeat) return; if (k === 'J' && !held.J) jLatch = 10; held[k] = true; $('b' + k).classList.add('down'); anyPress(); } });
   document.addEventListener('keyup', function (e) { var k = KEYS[e.key]; if (k) { held[k] = false; $('b' + k).classList.remove('down'); } });
   function sampleInput() { var s = (held.L ? M.IN.L : 0) | (held.R ? M.IN.R : 0) | ((held.J || jLatch > 0) ? M.IN.J : 0); if (jLatch > 0) jLatch--; return s; }
   function clearInput() { held.L = held.R = held.J = false; jLatch = 0; ['bL', 'bR', 'bJ'].forEach(function (b) { $(b).classList.remove('down'); }); }
@@ -121,7 +156,7 @@
     spike: ['我这么明显…', '看到了还撞？', '扎心了吧'],
     fall: ['下面没有路哦', '自由落体～']
   };
-  var HIT = 9, RAG = 30, REPLAY = 32;
+  var HIT = 4, RAG = 12, REPLAY = 32;
   function onDeath(g) {
     var w = g.world, cause = w.cause, kc = w.killer, kx, ky;
     if (kc >= 1000) { var bk = w.blocks[kc - 1000]; kx = (bk.c * T + T / 2); ky = bk.y + T / 2; g.reveal[blockCell(g.map, kc - 1000)] = true; }
@@ -145,7 +180,7 @@
         if (d.cause === 'spike' || d.cause === 'hidden' || d.cause === 'block') for (var i = 0; i < 6; i++) d.pieces.push({ x: d.rag.x + (i % 3) * 200, y: d.rag.y + ((i / 3) | 0) * 300, vx: (i % 3 - 1) * 30 + (i * 7 % 11) - 5, vy: -90 - (i * 13 % 50), r: 0, vr: (i % 2 ? 0.3 : -0.3) }); } return; }
     if (d.phase === 'rag') { var r = d.rag; r.x += r.vx; r.y += r.vy; r.vy += 9; r.rot += r.vr;
       for (var k = 0; k < d.pieces.length; k++) { var p = d.pieces[k]; p.x += p.vx; p.y += p.vy; p.vy += 9; p.r += p.vr; }
-      if (d.t >= RAG) { d.phase = 'replay'; d.t = 0; } return; }
+      if (d.t >= RAG) respawn(g); return; }
     if (d.phase === 'replay' && d.t >= REPLAY) respawn(g);
   }
   function respawn(g) { g.world.reset(); g.rec = []; g.dseq = null; goneAt = {}; popAt = {}; g.spawnT = 10; }
@@ -155,6 +190,7 @@
   var game = null;
   function trapHint(map) { var h = [];
     for (var i = 0; i < map.length; i++) { if (map[i] === TL.COL && h.indexOf('有的地板踩上去会塌') < 0) h.push('有的地板踩上去会塌');
+      if (map[i] === TL.SHIFT) h.push((map.rulesVersion || M.VERSION) >= 9 ? '坑会向左靠近，提前跳过变化的位置' : '坑的位置会变化'); if (map[i] === TL.CHASE) h.push('先跳，再继续跑，别停在扩大的坑前');
       if (map[i] === TL.HID && h.indexOf('平地上有藏起来的刺') < 0) h.push('平地上有藏起来的刺'); if (map[i] === TL.FALL && h.indexOf('有方块会从上面掉下来') < 0) h.push('有方块会从上面掉下来'); }
     return h.length ? h.join('；') + '。' : '这关没有恶搞机关。'; }
   function startPlay(opts) {
@@ -163,8 +199,8 @@
       ghostLabel: opts.ghostLabel || '作者', levelIdx: opts.levelIdx, hint: opts.hint || trapHint(opts.map), snapshot: opts.snapshot || null,
       tick: 0, deaths: 0, rec: [], done: false, gDone: false, dseq: null, shake: 0, reveal: {}, deathsAt: [], squash: 0, spawnT: 10 };
     $('pTitle').textContent = opts.title; editor.on = false; $('sPlay').classList.remove('editing'); $('edit').classList.remove('on'); $('pad').style.display = 'flex';
-    $('legend').innerHTML = game.ghost ? '<span><i style="background:' + C.hero + '"></i>你</span><span><i style="background:#c8cde0;opacity:.6"></i>' + game.ghostLabel + '的影子</span><span>死了可点任意键跳过回放</span>' : '<span>死了可点任意键跳过回放</span>';
-    setInfo(opts.mode === 'record' ? '先自己通关一次：<b>这次干净通关的操作会被录成影子</b>。死了从头录，最长 20 秒。' : (game.ghost ? '和' + game.ghostLabel + '的影子同时起跑，到达<b>终点旗</b>就算赢。' : '到达<b>终点旗</b>就算赢。'));
+    $('legend').innerHTML = opts.mode === 'demo' ? '<span>先自己试试；翻车 3 次后出现示范影子</span><span>翻车后快速重来</span>' : game.ghost ? '<span><i style="background:' + C.hero + '"></i>你</span><span><i style="background:#c8cde0;opacity:.6"></i>' + game.ghostLabel + '的影子</span><span>翻车后快速重来，可点任意键跳过动作</span>' : '<span>翻车后快速重来，可点任意键跳过动作</span>';
+    setInfo(opts.mode === 'demo' ? '先自己找路，到达<b>终点旗</b>就算赢。' : opts.mode === 'record' ? '先自己通关一次：<b>这次干净通关的操作会被录成影子</b>。死了从头录，最长 20 秒。' : (game.ghost ? '和' + game.ghostLabel + '的影子同时起跑，到达<b>终点旗</b>就算赢。' : '到达<b>终点旗</b>就算赢。'));
     show('sPlay'); updStat();
   }
   function setInfo(h) { $('info').innerHTML = h; }
@@ -176,7 +212,7 @@
     else {
       g.rec.push(inp);
       var ev = w.step(inp);
-      if (w.ev & 1) { SFX.jump(); g.squash = -6; } if (w.ev & 2) { SFX.land(); g.squash = 6; } if (w.ev & 32) { SFX.bounce(); g.squash = -8; } if (w.ev & 28) SFX.click();
+      if (w.ev & 1) { SFX.jump(); g.squash = -6; } if (w.ev & 2) { SFX.land(); g.squash = 6; } if (w.ev & 32) { SFX.bounce(); g.squash = -8; } if (w.ev & 220) SFX.click();
       if (ev === 1) { g.deaths++; onDeath(g); }
       else if (ev === 2) { finish(); return; }
       else if (g.mode === 'record' && w.tick >= M.MAX_FRAMES) { toast('超过 20 秒，重来'); respawn(g); }
@@ -298,7 +334,7 @@
     var share = '《我的关，我的影子》' + (g.mode === 'demo' ? '示范关「' + g.title + '」' : '') + ' ' + (skulls || '✨') + '🏁 ' + fmt(my).replace(' ', '') + (vs ? '（' + vs + '）' : '');
     $('rShare').textContent = share; $('rShare').setAttribute('data-t', share);
     $('rNext').style.display = (g.mode === 'demo' && g.levelIdx < LEVELS.length - 1) ? '' : 'none'; $('rMsg').textContent = '';
-    if (g.mode === 'demo') { var best = +store('best' + g.levelIdx) || 0; if (!best || my < best) store('best' + g.levelIdx, String(my)); }
+    if (g.mode === 'demo') { var best = +store('best_rules_v11_layout_v17_' + g.levelIdx) || 0; if (!best || my < best) store('best_rules_v11_layout_v17_' + g.levelIdx, String(my)); }
     show('sResult');
   }
 
@@ -315,7 +351,7 @@
   function bearState(w, f) {
     var o = { flip: w.face < 0, f: f };
     if (!w.grounded) { if (w.vy < 0) { o.anim = 'up'; o.f = 0; } else { o.anim = 'fall'; o.f = 0; } }
-    else if (Math.abs(w.vx) > 8) { o.anim = 'run'; o.f = (f / 3) | 0; } else { o.anim = 'idle'; o.f = (f / 7) | 0; }
+    else if (Math.abs(w.vx) > 8) { o.anim = 'run'; o.f = (f / 3) | 0; o.runPhase = (w.face < 0 ? -w.x : w.x) / ART3.runStride(M.PH) * Math.PI * 2; } else { o.anim = 'idle'; o.f = (f / 7) | 0; }
     return o;
   }
   function heroOpts(w, g) {
@@ -334,8 +370,9 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (g.shake > 0) { var a = g.shake * s * 0.012; ctx.translate((Math.random() * 2 - 1) * a, (Math.random() * 2 - 1) * a); }
     if (d && d.phase === 'replay') { renderReplay(g, d); return; }
+    applyCamera(g.world);
     drawMap(ctx, g.map, scale, g.world, 'play', rt);
-    if (g.gworld && !g.gDone) { var gw = g.gworld, gb = hb(gw), go = bearState(gw, g.tick); go.alpha = 0.5; go.tint = 'rgba(150,170,255,0.55)'; ART3.bear(ctx, gb[0], gb[1], gb[2], gb[3], go); }
+    if (g.gworld && !g.gDone && (g.mode !== 'demo' || g.deaths >= 3)) { var gw = g.gworld, gb = hb(gw), go = bearState(gw, g.tick); go.alpha = 0.5; go.tint = 'rgba(150,170,255,0.55)'; ART3.bear(ctx, gb[0], gb[1], gb[2], gb[3], go); }
     var w = g.world, p = hb(w);
     if (!d) { ART3.bear(ctx, p[0], p[1], p[2], p[3], heroOpts(w, g)); if (w.vy > 150 && !w.grounded) ART3.emote(ctx, 'drops', p[0] + p[2] * 1.05, p[1] + s * 0.05, s * 0.5); }
     else if (d.phase === 'hit') { ctx.fillStyle = 'rgba(255,255,255,' + (d.t < 2 ? 0.55 : 0) + ')'; ctx.fillRect(0, 0, COLS * s, ROWS * s);
@@ -349,6 +386,7 @@
     }
     if (d) drawTaunt(g, d);
     else drawTension(g);
+    drawReaction(g);
   }
   function drawTaunt(g, d) {
     if (!d.hasKiller || d.phase === 'hit') return; var s = T * scale, kx = d.kx * scale, ky = Math.min(d.ky * scale, ROWS * s - s * 0.5), t = d.phase === 'rag' ? d.t : RAG + d.t;
@@ -373,12 +411,13 @@
     var n = d.frames.length, f = d.t, idx;
     if (n >= 72) idx = f < 20 ? f * 3 : Math.min(n - 1, 60 + (f - 20)); else idx = Math.min(n - 1, Math.round(f / (REPLAY - 1) * (n - 1)));
     var w = d.frames[idx], s = T * scale, saveG = goneAt, saveP = popAt; goneAt = {}; popAt = {};
+    applyCamera(w);
     drawMap(ctx, g.map, scale, w, 'play', rt); goneAt = saveG; popAt = saveP;
     var p = hb(w), o = bearState(w, w.tick); if (idx >= n - 1) { o.anim = 'dizzy'; o.f = 2; } ART3.bear(ctx, p[0], p[1], p[2], p[3], o);
     ctx.fillStyle = 'rgba(40,60,120,0.25)'; ctx.fillRect(0, 0, COLS * s, ROWS * s);
     ctx.fillStyle = 'rgba(255,255,255,0.08)'; for (var y = (rt * 3) % 8; y < ROWS * s; y += 8 * dpr) ctx.fillRect(0, y, COLS * s, dpr);
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = s * 0.06; ctx.font = 'bold ' + Math.round(s * 0.36) + 'px sans-serif'; ctx.strokeText('◀◀ 回放：你是怎么死的', s * 0.25, s * 0.55); ctx.fillText('◀◀ 回放：你是怎么死的', s * 0.25, s * 0.55);
-    ctx.fillStyle = '#ff5d73'; ctx.beginPath(); ctx.arc(COLS * s - s * 0.45, s * 0.42, s * 0.12, 0, 7); if (rt % 30 < 18) ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = s * 0.06; ctx.font = 'bold ' + Math.round(s * 0.36) + 'px sans-serif'; ctx.strokeText('◀◀ 回放：你是怎么死的', camX + s * 0.25, camY + s * 0.55); ctx.fillText('◀◀ 回放：你是怎么死的', camX + s * 0.25, camY + s * 0.55);
+    ctx.fillStyle = '#ff5d73'; ctx.beginPath(); ctx.arc(camX + cv.width - s * 0.45, camY + s * 0.42, s * 0.12, 0, 7); if (rt % 30 < 18) ctx.fill();
     drawTaunt(g, d);
   }
   function drawGridLines() { var s = T * scale; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
@@ -401,7 +440,7 @@
     var s = store('editor_v4');
     if (s) {
       var a = s.split(',').map(Number);
-      if (a.length === COLS * ROWS && a.every(function (v) { return v >= 0 && v <= 8 && (v | 0) === v; })) return new Uint8Array(a);
+      if (a.length === COLS * ROWS && a.every(function (v) { return v >= 0 && v <= 10 && (v | 0) === v; })) return new Uint8Array(a);
     }
     return defaultMap();
   }
@@ -554,6 +593,48 @@
       return { map: map, reveal: reveal };
     } catch (e) { return null; }
   }
+  var PENDING_KEY = 'mlmg_pending_share_v1', pendingShare = null, postingPending = false;
+  function updatePendingShare() {
+    $('pendingShare').style.display = pendingShare ? '' : 'none';
+    $('pendingTitle').textContent = pendingShare ? pendingShare.title : '';
+  }
+  function validPending(data) {
+    if (!data || data.v !== 1 || typeof data.title !== 'string') return null;
+    try { M.decodeSnapshot(data.snapshot); return data; } catch (e) { return null; }
+  }
+  function restorePendingShare() {
+    if (!window.XHS) return;
+    XHS.getLocalData(PENDING_KEY).then(function (data) {
+      pendingShare = validPending(data); updatePendingShare();
+    }).catch(function () { /* 保持首页可用 */ });
+  }
+  function postPendingShare() {
+    if (!pendingShare || postingPending) return;
+    var el = $('pendingMsg'), saved = pendingShare;
+    if (!window.XHS || !XHS.canComment()) { setNoteMsg(el, false, '请从要发评论的笔记进入小工具，客户端需 9.49+'); return; }
+    if (!window.confirm('请确认你已从目标笔记打开小工具。将把「' + saved.title + '」发到当前笔记的评论区，是否继续？')) return;
+    postingPending = true; $('pendingPost').disabled = true; $('pendingClear').disabled = true;
+    Promise.resolve().then(function () {
+      var d = M.decodeSnapshot(saved.snapshot);
+      var image = drawCard(d.map, [], {}, saved.title, ['影子用时 ' + fmt(d.inputs.length)], '点评论关卡卡片，挑战同一关');
+      return XHS.postComment({ content: '来挑战这一关，追上我的影子！', snapshot: saved.snapshot, dataUrl: image, saveToAlbum: false });
+    }).then(function (r) {
+      setNoteMsg(el, !!(r && r.routed), r && r.routed ? '已打开评论框，请确认发送。待分享关卡继续保留，发完后可手动清除。' : '未能打开评论框，关卡仍已保留，请重试。');
+    }).catch(function (err) {
+      setNoteMsg(el, false, '打开评论失败：' + formatXhsError(err));
+    }).then(function () { postingPending = false; $('pendingPost').disabled = false; $('pendingClear').disabled = false; });
+  }
+  $('pendingPost').onclick = postPendingShare;
+  $('pendingClear').onclick = function () {
+    if (!pendingShare || postingPending) return;
+    if (!window.confirm('清除这条待分享记录？不会删除已经发布的笔记或评论。')) return;
+    $('pendingClear').disabled = true;
+    XHS.setLocalData(PENDING_KEY, null).then(function (ok) {
+      $('pendingClear').disabled = false;
+      if (!ok) { setNoteMsg($('pendingMsg'), false, '清除未成功，请重试'); return; }
+      pendingShare = null; updatePendingShare();
+    });
+  };
   var postingNote = false;
   function setNoteMsg(el, ok, text) {
     if (el) { el.className = ok ? 'ok' : 'err'; el.textContent = text; }
@@ -561,25 +642,50 @@
   }
   function setNoteBusy(busy) {
     postingNote = busy;
-    var b = $('mNote'); if (b) b.disabled = busy;
+    ['mNote', 'rNote', 'xNote'].forEach(function (id) { var b = $(id); if (b) b.disabled = busy; });
   }
-  // 只从首页调用。卡片可带最近通关的关卡缩略图，但 postNote 载荷绝不带快照。
-  function publishNote() {
+  // 首页分享游戏，结算页分享本次成绩；postNote 不携带关卡快照。
+  function publishNote(source) {
     if (postingNote) return;
-    var el = $('mMsg');
+    var result = source === 'result', exporting = source === 'export', el = $(result ? 'rMsg' : exporting ? 'xMsg' : 'mMsg');
     if (!window.XHS || typeof XHS.canPostNote !== 'function' || !XHS.canPostNote()) {
       setNoteMsg(el, false, '请在小红书 App 里打开小工具');
       return;
     }
     setNoteBusy(true);
     setNoteMsg(el, true, '正在生成分享图…');
-    var promo = loadPromoMap(), dataUrl = '';
-    try { dataUrl = drawShareNoteCard({ map: promo && promo.map, reveal: promo && promo.reveal, line: NOTE.SLOGAN, hint: NOTE.HINT }); }
+    var dataUrl = '', title = NOTE.TITLE, content = NOTE.CONTENT, draft = null;
+    try {
+      if (exporting) {
+        dataUrl = $('prevImg').src;
+        title = '我造了一关，来追我的影子';
+        content = '自己造关，自己先通关！我会把关卡卡片发到本篇评论，点评论卡片就能挑战同一关。\n\n#我的关我的影子';
+        draft = { v: 1, title: '我创造的关卡', snapshot: exportJson };
+      } else if (result) {
+        dataUrl = $('rCard').src;
+        if (dataUrl.indexOf('data:image/') !== 0) dataUrl = '';
+        title = '我的关，我的影子｜通关成绩';
+        content = $('rShare').getAttribute('data-t') + '\n\n我会把这一关的关卡卡片发到本篇评论，点评论卡片就能挑战同一关！\n\n#我的关我的影子';
+        draft = { v: 1, title: game.mode === 'demo' ? '示范关「' + game.title + '」' : game.title, snapshot: M.encodeSnapshot(game.map, game.rec) };
+      } else {
+        var promo = loadPromoMap();
+        dataUrl = drawShareNoteCard({ map: promo && promo.map, reveal: promo && promo.reveal, line: NOTE.SLOGAN, hint: NOTE.HINT });
+      }
+    }
     catch (e) { dataUrl = ''; }
     if (!dataUrl) { setNoteBusy(false); setNoteMsg(el, false, '分享图生成失败'); return; }
-    XHS.postNote({ title: NOTE.TITLE, content: NOTE.CONTENT, dataUrl: dataUrl, pageType: 'photo_publish' }).then(function () {
+    Promise.resolve().then(function () {
+      if (!draft) return true;
+      if (!validPending(draft)) throw new Error('关卡回放校验失败，无法保存待分享关卡');
+      return XHS.setLocalData(PENDING_KEY, draft).then(function (ok) {
+        if (!ok) throw new Error('关卡保存失败，请重试后再发布笔记');
+        pendingShare = draft; updatePendingShare();
+      });
+    }).then(function () {
+      return XHS.postNote({ title: title, content: content, dataUrl: dataUrl, pageType: 'photo_publish' });
+    }).then(function () {
       setNoteBusy(false);
-      setNoteMsg(el, true, '已打开发布笔记页。唤起成功不代表笔记已过审。');
+      setNoteMsg(el, true, draft ? '关卡已保存。发布笔记后，从新笔记重新打开小工具，在首页把关卡发到评论。' : '已打开发布笔记页。唤起成功不代表笔记已过审。');
     }).catch(function (err) {
       setNoteBusy(false);
       setNoteMsg(el, false, '发布失败：' + formatXhsError(err));
@@ -618,7 +724,8 @@
   $('xBack').onclick = function () { openEditor(); };
   // 在线文档 3.9：评论媒体须是 writeTempFile 句柄；routed 不代表已发布。需从挂着本工具的笔记里打开。
   $('xXhs').onclick = function () { postLevelComment(); };
-  // 在线文档 3.3 / 3.5：postNote 只从首页唤起，只推广游戏，不携带关卡快照。
+  // 在线文档 3.3 / 3.5：postNote 携带图文，不携带关卡快照。
+  $('xNote').onclick = function () { publishNote('export'); };
   if ($('mNote')) $('mNote').onclick = function () { publishNote(); };
 
   // ---------------- import / challenge ----------------
@@ -645,16 +752,16 @@
   $('pBack').onclick = function () { var g = game; game = null; clearInput();
     if (editor.on) { editor.on = false; show('sMenu'); } else if (g && g.mode === 'record') openEditor(); else if (g && g.mode === 'demo') { buildLevels(); show('sLevels'); } else show('sMenu'); };
   function playDemo(i) { var gh = DEMO_GHOSTS[i] ? M.decodeSnapshot(DEMO_GHOSTS[i]) : null;
-    startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: (i + 1) + '. ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
+    startPlay({ map: M.parseRows(LEVELS[i].rows), mode: 'demo', title: 'v17协调跑姿 · ' + LEVELS[i].name, ghost: gh ? gh.inputs : null, ghostLabel: 'AI示范', levelIdx: i, hint: LEVELS[i].hint }); }
   function buildLevels() { var list = $('lvlList'); list.innerHTML = '';
-    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best' + i) || 0;
+    LEVELS.forEach(function (l, i) { var b = document.createElement('button'), best = +store('best_rules_v11_layout_v17_' + i) || 0;
       b.innerHTML = '<span>' + (i + 1) + '. ' + l.name + '</span><span class="small">' + (best ? '最好 ' + (best / 60).toFixed(2) + 's' : '未通关') + '</span>';
       b.onclick = function () { playDemo(i); }; list.appendChild(b); }); }
   $('rAgain').onclick = function () { var g = game; if (!g) return show('sMenu'); if (g.mode === 'demo') playDemo(g.levelIdx); else startChallenge(g.snapshot, g.ghostLabel); };
   $('rNext').onclick = function () { if (game && game.mode === 'demo') playDemo(game.levelIdx + 1); };
   $('rMake').onclick = function () { editor.map = defaultMap(); editor.rec = null; openEditor(); };
   $('rMenu').onclick = function () { game = null; show('sMenu'); };
-  $('rCopy').onclick = function () { copyText($('rShare').getAttribute('data-t'), $('rMsg')); };
+  $('rNote').onclick = function () { publishNote('result'); };
 
   function drawLogo() { var g = $('logo').getContext('2d'); g.clearRect(0, 0, 240, 120); for (var i = 0; i < 8; i++) ART3.tile(g, 'g', i === 0 ? 'L' : i === 7 ? 'R' : 'M', i * 30, 90, 30);
     ART3.bear(g, 118, 44, 36, 46, { anim: 'run', f: 4, alpha: 0.5, tint: 'rgba(150,170,255,0.55)' }); ART3.bear(g, 66, 40, 36, 50, { anim: 'dead', f: 3, rot: -0.3 }); ART3.emote(g, 'swirl', 84, 40, 26); ART3.goal(g, 190, 52, 40, 0); ART3.spike(g, 152, 60, 30); }
@@ -671,6 +778,7 @@
       return true;
     } catch (e) { if ($('iMsg')) $('iMsg').textContent = (source || '启动参数') + '里的关卡打不开：' + e.message; return false; }
   }
+  restorePendingShare();
   launchDebug();
   var started = false, h = location.hash, q = (window.XHS && XHS.collectSearch) ? XHS.collectSearch() : {};
   if (h.indexOf('#s=') === 0) started = tryStartFromText(h.slice(3), '链接 hash');

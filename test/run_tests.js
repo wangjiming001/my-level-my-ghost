@@ -76,8 +76,9 @@ L.forEach(function (l, i) {
   console.log('L' + (i + 1) + ' ' + l.name + ': AI解 ' + ref.result + '@' + ref.frame + 'f(' + (ref.frame / 60).toFixed(2) + 's) end=(' + ref.x + ',' + ref.y + ') 100次一致=' + same +
     ' | 往返=' + (re.frames === d.frames) + ' | 一直按右:' + naiveR.result + ' 一直右+跳:' + naiveRJ.result + ' | 粗操作(每8帧换一次键)可解=' + (coarse ? (coarse.length / 60).toFixed(2) + 's' : 'NO') +
     ' | 快照 ' + M.utf8len(snap) + 'B, ' + M.inputsToEvents(inputs).length + '个事件');
+  ok(!!coarse, 'coarse 8-tick controls can clear L' + (i + 1));
   ok(ref.result === 'win' && same === 100, 'determinism L' + (i + 1)); ok(re.frames === d.frames, 'roundtrip L' + (i + 1));
-  ok(JSON.parse(snap).v === 3, 'demo ghosts encoded as v3');
+  ok(JSON.parse(snap).v === M.VERSION, 'demo ghosts encoded with current rules');
 });
 console.log('== 2. 快照大小 & v2 兼容 ==');
 var map0 = M.parseRows(L[0].rows);
@@ -96,7 +97,7 @@ try {
   console.log('  v2 兼容解码成功, 帧=' + d2.frames + ', 地图无弹跳=' + (function () { for (var i = 0; i < d2.map.length; i++) if (d2.map[i] === 8) return false; return true; })());
 } catch (e) { ok(false, 'v2 decode: ' + e.message); }
 var v3 = JSON.parse(M.encodeSnapshot(map0, M.decodeSnapshot(ghosts[0]).inputs));
-ok(v3.v === 3 && v3.m.length === 64, 'v3 encoder writes 64-char map');
+ok(v3.v === M.VERSION && v3.m.length === 64, 'current encoder writes 64-char map');
 console.log('== 3. 拒绝测试 ==');
 var good = ghosts[0], o = JSON.parse(good);
 function mut(fn) { var x = JSON.parse(good); fn(x); return JSON.stringify(x); }
@@ -104,7 +105,7 @@ function resign(x) { x.c = M.checksum(x.v + '|' + x.m + '|' + x.g + '|' + x.f); 
 var lateGoal = (function () { var x = JSON.parse(good); x.f = x.f + 30; return JSON.stringify(resign(x)); })();
 var bad = {
   '空字符串': '', '非JSON': '{abc', '数组': '[1,2]', 'null': 'null', '超长(3000字节)': good.slice(0, -1) + ',"x":"' + 'a'.repeat(3000) + '"}',
-  '多余字段': mut(function (x) { x.x = 1; }), '版本错误': mut(function (x) { x.v = 4; }), '第一版旧快照(v1)': mut(function (x) { x.v = 1; }), '帧数为负': mut(function (x) { x.f = -5; }),
+  '多余字段': mut(function (x) { x.x = 1; }), '版本错误': mut(function (x) { x.v = 99; }), '第一版旧快照(v1)': mut(function (x) { x.v = 1; }), '帧数为负': mut(function (x) { x.f = -5; }),
   '帧数超20秒': mut(function (x) { x.f = 99999; }), '帧数小数': mut(function (x) { x.f = 10.5; }), '地图被截断': mut(function (x) { x.m = x.m.slice(0, 40); }),
   '地图非法字符': mut(function (x) { x.m = '!' + x.m.slice(1); }), '校验和不符(改一个字符)': mut(function (x) { x.g = (x.g[0] === 'A' ? 'B' : 'A') + x.g.slice(1); }),
   '篡改帧数并重签校验和(谎报更快)': (function () { var x = JSON.parse(good); x.f = x.f - 20; return JSON.stringify(resign(x)); })(),
@@ -112,11 +113,19 @@ var bad = {
   '篡改地图删终点并重签': (function () { var x = JSON.parse(good); var m = M.unpackMap(M.b64dec(x.m)); for (var i = 0; i < m.length; i++) if (m[i] === 4) m[i] = 0; x.m = M.b64enc(M.packMap(m)); return JSON.stringify(resign(x)); })(),
   '篡改地图放4个机关并重签': (function () { var x = JSON.parse(good); var m = M.unpackMap(M.b64dec(x.m)); m[0] = 5; m[1] = 6; m[2] = 7; m[3] = 5; x.m = M.b64enc(M.packMap(m)); return JSON.stringify(resign(x)); })(),
   '篡改地图把刺放路上并重签': (function () { var x = JSON.parse(good); var m = M.unpackMap(M.b64dec(x.m));
-    m[54] = 2; // L1 mid-shelf landing cell (row 4, col 6); recorded ghost lands here
+    // Find a lethal empty cell on the actual recorded route, independent of demo layout.
+    var inputs = M.decodeSnapshot(good).inputs, found = false;
+    for (var j = 0; j < m.length; j++) {
+      if (m[j] !== M.TILE.E) continue;
+      m[j] = M.TILE.SPK;
+      if (M.simulate(m, inputs).result === 'dead') { found = true; break; }
+      m[j] = M.TILE.E;
+    }
+    if (!found) throw new Error('No lethal route mutation found');
     x.m = M.b64enc(M.packMap(m)); return JSON.stringify(resign(x)); })(),
   '影子换成乱码并重签': (function () { var x = JSON.parse(good); x.g = '////////'; return JSON.stringify(resign(x)); })(),
   '影子varint超长并重签': (function () { var x = JSON.parse(good); x.g = M.b64enc(new Uint8Array([0, 255, 255, 255, 255, 1])); return JSON.stringify(resign(x)); })(),
-  '影子是别的关的(重签)': (function () { var x = JSON.parse(good), y = JSON.parse(ghosts[4]); x.g = y.g; x.f = y.f; return JSON.stringify(resign(x)); })(),
+  '影子是别的关的(重签)': (function () { var x = JSON.parse(good), foreign = M.parseRows(L.templates[0].rows), steps = new Uint8Array(1200).fill(M.IN.R), result = M.simulate(foreign, steps); var y = JSON.parse(M.encodeSnapshot(foreign, steps.slice(0, result.frame))); x.g = y.g; x.f = y.f; return JSON.stringify(resign(x)); })(),
   '链接hash注入': 'HASH:<script>alert(1)</script>'
 };
 var crashes = 0;
